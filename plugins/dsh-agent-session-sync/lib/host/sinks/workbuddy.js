@@ -71,6 +71,24 @@ function derivedSessionId(conversation) {
 /** This target replaces an existing transcript when the id already exists. */
 export const overwrite = true;
 
+/**
+ * Tools whose only job is to ask the user a question inside the source app.
+ *
+ * WorkBuddy has a native question tool and matches it by name, so exporting
+ * the call verbatim produces a live-looking question card on a finished
+ * transcript: `arguments` is `{}` on the DSH side (the question never lived
+ * there), the card therefore shows nothing to answer, and its buttons are
+ * dead. The question and the chosen answers survive only in the tool result,
+ * which reads perfectly as text — so this sink drops the call and emits the
+ * recorded Q&A as ordinary assistant text.
+ */
+const ASK_USER_TOOL = /^ask_?user_?question$/i;
+
+/** Whether one tool-call block is an ask-the-user interaction. */
+function isAskUserTool(call) {
+  return ASK_USER_TOOL.test(String(call?.name ?? ''));
+}
+
 /** Process image that must not be running while we write. */
 const EXE_NAME = 'WorkBuddy.exe';
 
@@ -355,6 +373,7 @@ export function buildRows(conversation, options = {}) {
 
   const notes = [...(conversation.notes ?? [])];
   let flattenedRuns = 0;
+  let convertedAsks = 0;
 
   for (const turn of conversation.turns ?? []) {
     const userText = (turn.user?.content ?? [])
@@ -439,11 +458,24 @@ export function buildRows(conversation, options = {}) {
         .join('\n\n')
         .trim();
 
-      if (textValue !== '') {
+      // Ask-the-user calls become text instead of a foreign question card; the
+      // recorded answers are all the transcript needs to stay readable.
+      const askCalls = calls.filter((call) => isAskUserTool(call));
+      const workCalls = calls.filter((call) => !isAskUserTool(call));
+      const askText = askCalls
+        .map((call) => (run.toolResults ?? []).find((entry) => entry.callId === call.id))
+        .map((result) => (typeof result?.output === 'string' ? result.output.trim() : ''))
+        .filter((value) => value !== '')
+        .join('\n');
+      if (askCalls.length > 0) convertedAsks += askCalls.length;
+
+      const assistantText = [textValue, askText].filter((value) => value !== '').join('\n\n');
+
+      if (assistantText !== '') {
         push({
           type: 'message',
           role: 'assistant',
-          content: [{ type: 'output_text', text: textValue }],
+          content: [{ type: 'output_text', text: assistantText }],
           sessionId,
           cwd,
           timestamp: runAt,
@@ -453,7 +485,7 @@ export function buildRows(conversation, options = {}) {
         });
       }
 
-      for (const call of calls) {
+      for (const call of workCalls) {
         push({
           type: 'function_call',
           callId: call.id,
@@ -488,6 +520,7 @@ export function buildRows(conversation, options = {}) {
   }
 
   if (flattenedRuns > 0) notes.push(`${flattenedRuns} 段助手输出的工具调用已内联为纯文本（接续友好模式）`);
+  if (convertedAsks > 0) notes.push(`${convertedAsks} 次「向用户提问」已转为文本问答（避免在 WorkBuddy 里变成空提问卡片）`);
   return { sessionId, title, cwd, rows, notes };
 }
 
