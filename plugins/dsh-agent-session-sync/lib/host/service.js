@@ -15,10 +15,9 @@
  *   POST /session-import/cancel { jobId }                     → { cancelled }
  * Every endpoint answers `{ ok: true, value }` or `{ ok: false, error: {...} }`.
  */
-import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename } from 'node:path';
 import { providerById } from './providers/registry.js';
-import { ImportedState, LEGACY_PROVIDER_ID, importKey } from './state.js';
+import { ImportedState, LEGACY_PROVIDER_ID, importKey, resolveDshHome } from './state.js';
 import { ImportJobs } from './jobs.js';
 import { SourceScanner } from './scan.js';
 import { persistConversation } from './reimport.js';
@@ -54,14 +53,7 @@ function estimateTranscriptChars(conversation) {
   return chars;
 }
 
-/** Resolve the DeepSeek Harness home the same way the CLI does. */
-function resolveDshHome() {
-  const configured = typeof process.env.DSH_HOME === 'string' ? process.env.DSH_HOME.trim() : '';
-  return configured === '' ? join(homedir(), '.dsh') : configured;
-}
-
-/** A RemoteResult-style failure. */
-function failure(code, message, details = {}) {
+/** A RemoteResult-style failure. */function failure(code, message, details = {}) {
   return { ok: false, error: { code, message, details } };
 }
 
@@ -73,6 +65,69 @@ function success(value) {
 /** Sleep helper. */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Whether one workspace currently presents this session as a member.
+ *
+ * DSH's `sessionIds` is a *filtered* view — it hides members whose cwd no
+ * longer canonically equals the workspace path — so this is the only honest way
+ * to tell "attached" from "attached but invisible". Registries that expose no
+ * such list (older profiles, test doubles) are assumed to have taken the call.
+ *
+ * @param workspace - workspace entity.
+ * @param sessionId - session just attached.
+ * @returns true when the session shows up under that workspace.
+ */
+function listsSession(workspace, sessionId) {
+  return Array.isArray(workspace?.sessionIds) ? workspace.sessionIds.includes(sessionId) : true;
+}
+
+/**
+ * Force one membership to be validated again.
+ *
+ * `attachSession` short-circuits when the id is already a member, which means a
+ * stale membership can never heal itself: the record keeps the id, the sidebar
+ * keeps filtering it out, and the session sits in "未分类" forever. Detaching
+ * first makes the attach path run its cwd check and re-index the session.
+ *
+ * @param workspace - workspace entity.
+ * @param sessionId - session to re-attach.
+ */
+async function reattach(workspace, sessionId) {
+  try {
+    if (typeof workspace.detachSession === 'function') await workspace.detachSession(sessionId);
+  } catch {
+    // Not a member, or pinned: the attach below is what decides the outcome.
+  }
+  try {
+    await workspace.attachSession(sessionId);
+  } catch {
+    // Swallowed on purpose: the caller verifies and reports.
+  }
+}
+
+/**
+ * Drop a session from every workspace except the one that owns its cwd.
+ *
+ * A session belongs to exactly one directory, so a second membership is either
+ * stale or a mis-filing. Leaving it would show the session twice (or show a
+ * group whose contents the sidebar filters away).
+ *
+ * @param registry - workspace registry.
+ * @param keep - the workspace the session belongs to.
+ * @param sessionId - session to prune from the others.
+ */
+async function detachElsewhere(registry, keep, sessionId) {
+  for (const other of registry.list()) {
+    if (other === keep || other?.id === keep?.id) continue;
+    if (!Array.isArray(other?.sessionIds) || !other.sessionIds.includes(sessionId)) continue;
+    try {
+      if (typeof other.detachSession === 'function') await other.detachSession(sessionId);
+    } catch {
+      // Best effort: a refused detach leaves the old behaviour untouched.
+    }
+  }
 }
 
 /**
@@ -169,10 +224,23 @@ export class ImportService {
       const before = new Set(registry.list().map((workspace) => workspace.id));
       const workspace = await registry.create(directory, title);
       await workspace.attachSession(sessionId);
+      // `attachSession` returns immediately when the id is already a member, so
+      // it can never repair a membership the sidebar has stopped honouring: DSH
+      // filters a workspace's members through its own cwd index, and a session
+      // whose header cwd changed (a re-import that rewrote it, a moved project)
+      // drops out of the group while still being a member. Detach + attach
+      // re-runs the validation and refreshes that index.
+      if (!listsSession(workspace, sessionId)) await reattach(workspace, sessionId);
+      // A session has exactly one honest home: the workspace whose path equals
+      // its cwd. Anything else listing it would show it twice, or show a group
+      // whose contents the sidebar then filters away.
+      await detachElsewhere(registry, workspace, sessionId);
       return {
         title: typeof workspace.title === 'string' && workspace.title !== '' ? workspace.title : title,
         created: !before.has(workspace.id),
-        error: null,
+        error: listsSession(workspace, sessionId)
+          ? null
+          : '工作区认为这条会话的目录不匹配（cwd 与工作区路径不一致），侧边栏可能仍把它放在「未分类」',
       };
     } catch (error) {
       return { title, created: false, error: error instanceof Error ? error.message : String(error) };
@@ -256,59 +324,75 @@ export class ImportService {
           });
           const { written, merged, addedTurns } = outcome;
           warnings.push(...outcome.warnings);
-          // An untouched merge has no plan: nothing was written to warm.
-          const warmed = written.plan === undefined ? false : await this.warmProjectionCache(written.sessionId, written.plan);
-          // Group the new session under the workspace it came from. This is the
-          // difference between "another 未分组 entry" and the sidebar showing
-          // 「DeepHarness」 above it; a project-less conversation is skipped and
-          // stays ungrouped on purpose.
-          const workspace = options.groupByWorkspace === false
-            ? null
-            : await this.attachToWorkspace(written.sessionId, normalized);
-          if (workspace !== null && workspace.error !== null) {
-            warnings.push(`未能归入工作区「${workspace.title}」：${workspace.error}（会话已导入，位置在「未分组」）`);
+          if (outcome.skipped === true) {
+            // Nothing was written on purpose. The previous session is live, so a
+            // write would be flushed over by it, and minting a second session
+            // leaves the user with two identical rows (and, when the source has
+            // no project directory, a stray one in 未分组). The source keeps
+            // everything; the next import — after the tab is closed — merges.
+            job.results.push({
+              source: item.source,
+              id: item.id,
+              title: normalized.title,
+              ok: false,
+              skipped: true,
+              error: outcome.warnings.join('；'),
+            });
+          } else {
+            // An untouched merge has no plan: nothing was written to warm.
+            const warmed = written.plan === undefined ? false : await this.warmProjectionCache(written.sessionId, written.plan);
+            // Group the new session under the workspace it came from. This is the
+            // difference between "another 未分组 entry" and the sidebar showing
+            // 「DeepHarness」 above it; a project-less conversation is skipped and
+            // stays ungrouped on purpose.
+            const workspace = options.groupByWorkspace === false
+              ? null
+              : await this.attachToWorkspace(written.sessionId, normalized);
+            if (workspace !== null && workspace.error !== null) {
+              warnings.push(`未能归入工作区「${workspace.title}」：${workspace.error}（会话已导入，位置在「未分组」）`);
+            }
+            this.state.set(key, {
+              source: item.source,
+              remoteId: item.id,
+              sessionId: written.sessionId,
+              importedAt: Date.now(),
+              title: normalized.title,
+              cwd,
+              messageCount: normalized.messageCount ?? null,
+              mode: options.mode,
+              transcriptChars,
+              projectionCacheWarmed: warmed,
+              // A merge keeps the session the previous import created and appends
+              // only what the source gained, so record that it happened: the
+              // panel says so, and the next re-import can tell a merge from a
+              // fresh write when reading the row back.
+              merged,
+              addedTurns,
+            });
+            job.results.push({
+              source: item.source,
+              id: item.id,
+              title: normalized.title,
+              ok: true,
+              sessionId: written.sessionId,
+              cwd,
+              importedMessages: normalized.messageCount ?? null,
+              mode: options.mode,
+              // `replaced` is true only when the old session was actually removed
+              // and rewritten in place. A re-import that could not delete falls
+              // back to a new session, and the panel tells the user so.
+              replaced: written.replaced === true,
+              // `merged` is the normal re-import path now: the existing session
+              // was extended in place. `addedTurns` is how many turns that
+              // appended — 0 means the source had nothing new.
+              merged,
+              addedTurns,
+              // Where the sidebar will show it: `null` means "未分组" (the source
+              // conversation named no project directory).
+              workspace: workspace === null ? null : { title: workspace.title, created: workspace.created },
+              ...(warnings.length === 0 ? {} : { warnings }),
+            });
           }
-          this.state.set(key, {
-            source: item.source,
-            remoteId: item.id,
-            sessionId: written.sessionId,
-            importedAt: Date.now(),
-            title: normalized.title,
-            cwd,
-            messageCount: normalized.messageCount ?? null,
-            mode: options.mode,
-            transcriptChars,
-            projectionCacheWarmed: warmed,
-            // A merge keeps the session the previous import created and appends
-            // only what the source gained, so record that it happened: the
-            // panel says so, and the next re-import can tell a merge from a
-            // fresh write when reading the row back.
-            merged,
-            addedTurns,
-          });
-          job.results.push({
-            source: item.source,
-            id: item.id,
-            title: normalized.title,
-            ok: true,
-            sessionId: written.sessionId,
-            cwd,
-            importedMessages: normalized.messageCount ?? null,
-            mode: options.mode,
-            // `replaced` is true only when the old session was actually removed
-            // and rewritten in place. A re-import that could not delete falls
-            // back to a new session, and the panel tells the user so.
-            replaced: written.replaced === true,
-            // `merged` is the normal re-import path now: the existing session
-            // was extended in place. `addedTurns` is how many turns that
-            // appended — 0 means the source had nothing new.
-            merged,
-            addedTurns,
-            // Where the sidebar will show it: `null` means "未分组" (the source
-            // conversation named no project directory).
-            workspace: workspace === null ? null : { title: workspace.title, created: workspace.created },
-            ...(warnings.length === 0 ? {} : { warnings }),
-          });
         }
       } catch (error) {
         job.results.push({

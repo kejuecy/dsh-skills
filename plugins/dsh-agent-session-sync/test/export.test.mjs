@@ -15,6 +15,7 @@ import zlib from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
 
 import { eventsToConversation, listDshConversations, loadDshConversation, readDshEvents } from '../lib/host/dsh-source.js';
+import { atomicWrite } from '../lib/host/sinks/shared.js';
 import * as workbuddySink from '../lib/host/sinks/workbuddy.js';
 import { ExportService } from '../lib/host/export-service.js';
 
@@ -437,6 +438,88 @@ test('workbuddy sink: flat mode inlines tool calls as text', async () => {
   assert.ok(rows.some((row) => row.type === 'message' && row.role === 'assistant' && row.content[0].text.includes('[工具调用]')));
 });
 
+test('workbuddy sink gives imported sessions full access and keeps a user choice', async () => {
+  // WorkBuddy resolves a session's permission level from `permission_mode`; a
+  // row written without it lands on `default`, where every tool call waits for
+  // an approval the imported transcript cannot answer.
+  const fx = fixture();
+  withEnv(fx);
+  createWorkbuddyDb(fx.wbHome);
+  writeDshSession(fx.sessions, '--ws--', 'session-perm', sampleEvents('session-perm', 'C:\\proj'));
+  const conversation = loadDshConversation('session-perm');
+  const sessionId = '77777777-7777-4777-8777-777777777777';
+  const dbPath = path.join(fx.wbHome, 'workbuddy.db');
+
+  await workbuddySink.write(conversation, { dryRun: false, sessionId, force: true, cwd: 'C:\\proj' });
+  let db = new DatabaseSync(dbPath);
+  assert.equal(
+    db.prepare('SELECT permission_mode FROM sessions WHERE id = ?').get(sessionId).permission_mode,
+    'fullAccess',
+  );
+  // The user narrows it inside WorkBuddy; a re-export must not undo that.
+  db.prepare('UPDATE sessions SET permission_mode = ? WHERE id = ?').run('bypassPermissions', sessionId);
+  db.close();
+
+  await workbuddySink.write(conversation, { dryRun: false, sessionId, force: true, cwd: 'C:\\proj' });
+  db = new DatabaseSync(dbPath);
+  assert.equal(
+    db.prepare('SELECT permission_mode FROM sessions WHERE id = ?').get(sessionId).permission_mode,
+    'bypassPermissions',
+  );
+  db.close();
+});
+
+test('workbuddy sink turns ask-user calls into text instead of a question card', () => {
+  // WorkBuddy matches its native question tool by name, so a verbatim
+  // `AskUserQuestion` call from DSH opens as a live-looking card with empty
+  // arguments: nothing to answer, buttons that do nothing. The recorded Q&A in
+  // the tool result is the portable form.
+  const conversation = {
+    id: 'session-ask',
+    title: '带提问的会话',
+    cwd: 'C:\\proj',
+    createdAt: 1792634700000,
+    turns: [
+      {
+        at: 1792634700000,
+        user: { content: [{ type: 'text', text: '用哪种落地方式？' }] },
+        runs: [
+          {
+            at: 1792634701000,
+            blocks: [
+              { type: 'text', text: '先确认两件事：' },
+              { type: 'tool-call', id: 'call_ask_1', name: 'AskUserQuestion', arguments: '{}' },
+            ],
+            toolResults: [
+              {
+                callId: 'call_ask_1',
+                output: '· 落地方式？ → 写入 WorkBuddy 原生会话（推荐）',
+                isError: false,
+                at: 1792634702000,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const { rows, notes } = workbuddySink.buildRows(conversation, {
+    sessionId: '55555555-5555-4555-8555-555555555555',
+    cwd: 'C:\\proj',
+  });
+
+  assert.equal(rows.filter((row) => row.type === 'function_call').length, 0, 'no foreign question card may be written');
+  assert.equal(rows.filter((row) => row.type === 'function_call_result').length, 0);
+  const assistantText = rows
+    .filter((row) => row.type === 'message' && row.role === 'assistant')
+    .flatMap((row) => row.content.map((block) => block.text))
+    .join('\n');
+  assert.ok(assistantText.includes('先确认两件事'), 'the reply text must stay');
+  assert.ok(assistantText.includes('写入 WorkBuddy 原生会话'), 'the recorded answer must survive as text');
+  assert.ok(notes.some((note) => note.includes('向用户提问')), 'the conversion must be reported');
+});
+
 test('workbuddy sink rejects ids its own reader cannot see', async () => {
   const fx = fixture();
   withEnv(fx);
@@ -711,4 +794,175 @@ test('exporting the same session twice updates it in place', async () => {
     db.close();
   }
   service.dispose();
+});
+
+test('atomicWrite retries a Windows EPERM rename race and recovers', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-retry-'));
+  const file = path.join(dir, 'session.jsonl');
+  fs.writeFileSync(file, 'old content');
+  let calls = 0;
+  const eperm = () => {
+    const error = new Error('EPERM: operation not permitted, rename');
+    error.code = 'EPERM';
+    return error;
+  };
+  const result = atomicWrite(file, 'new content', {
+    replaceDeps: {
+      rename: (from, to) => {
+        calls += 1;
+        if (calls <= 2) throw eperm(); // watcher/AV holds the destination
+        fs.renameSync(from, to);
+      },
+      sleep: () => {},
+    },
+  });
+  assert.equal(fs.readFileSync(file, 'utf8'), 'new content');
+  assert.equal(result.strategy, 'rename');
+  assert.equal(result.retries, 2);
+  assert.equal(fs.readdirSync(dir).filter((name) => name.includes('.tmp-')).length, 0, 'no temp leftovers');
+});
+
+test('atomicWrite falls back to copy when the destination stays locked', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aw-copy-'));
+  const file = path.join(dir, 'session.jsonl');
+  fs.writeFileSync(file, 'old content');
+  const eperm = () => {
+    const error = new Error('EPERM: operation not permitted');
+    error.code = 'EPERM';
+    return error;
+  };
+  const result = atomicWrite(file, 'new content', {
+    replaceDeps: {
+      rename: () => {
+        throw eperm(); // lock never clears
+      },
+      unlink: (target) => {
+        if (target === file) throw eperm(); // cannot even drop the target
+        fs.unlinkSync(target); // the temp file unlinks fine
+      },
+      sleep: () => {},
+      attempts: 2,
+    },
+  });
+  assert.equal(result.strategy, 'copy');
+  assert.equal(result.recovered, true);
+  assert.equal(fs.readFileSync(file, 'utf8'), 'new content');
+});
+
+/** Record one import round trip in the durable map the exporter reads back. */
+function writeImportedMap(dshHome, entries) {
+  const dir = path.join(dshHome, 'session-import');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'imported.json'), `${JSON.stringify(entries, null, 2)}\n`, 'utf8');
+}
+
+test('exporting an imported session writes back to the original, not a copy', async () => {
+  // Regression: import mints a fresh DSH uuid (`state.js`), and the exporter
+  // derived the WorkBuddy id from *that* uuid. A conversation that made the
+  // round trip therefore landed in WorkBuddy under a new id, leaving the
+  // original session untouched beside it — two sessions, same title, same
+  // project. The import map is the only record of the original id.
+  const fx = fixture();
+  withEnv(fx);
+  createWorkbuddyDb(fx.wbHome);
+  const originId = '99999999-9999-4999-8999-999999999999';
+  writeDshSession(fx.sessions, '--ws--', 'session-round', sampleEvents('session-round', 'C://proj'));
+  writeImportedMap(fx.dshHome, {
+    [`workbuddy:${originId}`]: {
+      source: 'workbuddy',
+      remoteId: originId,
+      sessionId: 'session-round',
+      importedAt: 1_700_000_000_000,
+      title: '查看测试覆盖率',
+      cwd: 'C://proj',
+      messageCount: 3,
+      mode: 'full',
+    },
+  });
+  const service = quietService();
+
+  const plan = await service.handle('export', {
+    id: 'session-round',
+    target: 'workbuddy',
+    options: { mode: 'full', confirm: false },
+  });
+  assert.equal(plan.ok, true, JSON.stringify(plan.error));
+  assert.equal(plan.value.sessionId, originId, 'the plan must target the original id');
+  assert.ok(
+    plan.value.notes.some((note) => note.includes('写回原会话')),
+    'the plan must explain that it updates the original',
+  );
+
+  const done = await service.handle('export', {
+    id: 'session-round',
+    target: 'workbuddy',
+    options: { mode: 'full', confirm: true, force: true },
+  });
+  assert.equal(done.ok, true, JSON.stringify(done.error));
+  assert.equal(done.value.sessionId, originId);
+  const transcripts = fs
+    .readdirSync(path.join(fx.wbHome, 'projects'), { recursive: true })
+    .filter((entry) => String(entry).endsWith('.jsonl'))
+    .map((entry) => path.basename(String(entry)));
+  assert.deepEqual(transcripts, [`${originId}.jsonl`], 'exactly one transcript, under the original id');
+  service.dispose();
+});
+
+test('a round-tripped session keeps the project folder that already holds it', async () => {
+  // The DSH session may have been given a different cwd after import. Writing
+  // the original id into a *second* project folder is the same duplicate bug by
+  // another route, so the folder that already holds the id wins.
+  const fx = fixture();
+  withEnv(fx);
+  createWorkbuddyDb(fx.wbHome);
+  const originId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const originalDir = path.join(fx.wbHome, 'projects', 'c-old-project');
+  fs.mkdirSync(originalDir, { recursive: true });
+  fs.writeFileSync(path.join(originalDir, `${originId}.jsonl`), '{"type":"session-meta"}\n', 'utf8');
+  writeDshSession(fx.sessions, '--ws--', 'session-moved', sampleEvents('session-moved', 'C://new-place'));
+  const conversation = loadDshConversation('session-moved');
+
+  const result = await workbuddySink.write(conversation, {
+    dryRun: false,
+    originId,
+    force: true,
+    cwd: 'C://new-place',
+  });
+  assert.equal(result.sessionId, originId);
+  assert.equal(result.project, 'c-old-project', 'must stay in the folder that already holds the id');
+  assert.equal(result.mode, 'overwritten');
+  assert.equal(
+    fs.existsSync(path.join(fx.wbHome, 'projects', 'c-new-place', `${originId}.jsonl`)),
+    false,
+    'no second copy under the new cwd',
+  );
+});
+
+test('workbuddy sink ignores an origin id its own reader could not open', async () => {
+  // A garbled map entry must not be able to break an export that works today.
+  const fx = fixture();
+  withEnv(fx);
+  createWorkbuddyDb(fx.wbHome);
+  writeDshSession(fx.sessions, '--ws--', 'session-bad-origin', sampleEvents('session-bad-origin', 'C://proj'));
+  const conversation = loadDshConversation('session-bad-origin');
+
+  const result = await workbuddySink.write(conversation, {
+    dryRun: false,
+    originId: 'not a session id',
+    force: true,
+    cwd: 'C://proj',
+  });
+  assert.match(result.sessionId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/);
+  assert.ok(!result.notes.some((note) => note.includes('写回原会话')), 'no round-trip note without an origin id');
+
+  // An explicit id (the panel, a script) always outranks the origin.
+  const explicit = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
+  const forced = await workbuddySink.write(conversation, {
+    dryRun: false,
+    sessionId: explicit,
+    originId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    force: true,
+    cwd: 'C://proj',
+  });
+  assert.equal(forced.sessionId, explicit);
 });

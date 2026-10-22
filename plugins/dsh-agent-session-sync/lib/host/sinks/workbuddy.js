@@ -68,6 +68,49 @@ function derivedSessionId(conversation) {
   return WORKBUDDY_ID.test(candidate) ? candidate : undefined;
 }
 
+/**
+ * The original WorkBuddy id this conversation came from, when the caller knows it.
+ *
+ * A session imported into DSH and then exported back has two possible ids: the
+ * fresh DSH uuid it was given at import, and the id it already owns in
+ * WorkBuddy. Picking the first one writes a *second* session beside the
+ * original (same title, same project) instead of updating it, which is the
+ * duplicate this helper exists to prevent. `originId` is advisory: the shape is
+ * re-validated here, so a garbled entry falls back to the old behaviour rather
+ * than failing the export.
+ *
+ * @param originId - candidate id supplied by the export service.
+ * @returns a WorkBuddy-compatible id, or undefined.
+ */
+function preferredOriginId(originId) {
+  const raw = typeof originId === 'string' ? originId.trim() : '';
+  return raw !== '' && WORKBUDDY_ID.test(raw) ? raw : undefined;
+}
+
+/**
+ * The project folder that already holds this session's transcript, if any.
+ *
+ * A round-tripped session must land back in the folder it came from: writing it
+ * beside a *different* cwd would put the same id in two project folders, which
+ * the sidebar shows as two sessions — the very symptom being fixed, just via a
+ * different route.
+ *
+ * @param root - projects root.
+ * @param sessionId - target session id.
+ * @returns project folder name, or undefined when the id is new.
+ */
+function existingProjectDir(root, sessionId) {
+  try {
+    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (fs.existsSync(path.join(root, entry.name, `${sessionId}.jsonl`))) return entry.name;
+    }
+  } catch {
+    // No projects folder yet: the computed name is the project's first name.
+  }
+  return undefined;
+}
+
 /** This target replaces an existing transcript when the id already exists. */
 export const overwrite = true;
 
@@ -533,7 +576,7 @@ export function buildRows(conversation, options = {}) {
  * Write one conversation into WorkBuddy.
  *
  * @param conversation - neutral conversation.
- * @param options - `{ dryRun?, force?, sessionId?, cwd?, title?, targetProject?, overwrite?, flattenTools? }`.
+ * @param options - `{ dryRun?, force?, sessionId?, originId?, cwd?, title?, targetProject?, overwrite?, flattenTools? }`.
  * @returns WriteResult (see `./shared.js`).
  */
 export async function write(conversation, options = {}) {
@@ -542,11 +585,11 @@ export async function write(conversation, options = {}) {
   const notes = [...(conversation.notes ?? [])];
 
   const cwd = options.cwd ?? conversation.cwd ?? os.homedir();
-  const project = options.targetProject ?? encodeProjectDir(cwd, env);
   // WorkBuddy's own reader (`providers/workbuddy.js`) only accepts ids that
   // look like `<uuid>` or `agent-<hash>`; anything else is invisible to it no
   // matter how correct the file is. Enforce the same shape here.
-  const sessionId = options.sessionId ?? derivedSessionId(conversation) ?? randomUUID();
+  const originId = options.sessionId === undefined ? preferredOriginId(options.originId) : undefined;
+  const sessionId = options.sessionId ?? originId ?? derivedSessionId(conversation) ?? randomUUID();
   if (!WORKBUDDY_ID.test(sessionId)) {
     const error = new Error(
       `会话 id 不符合 WorkBuddy 的命名规则（需要 UUID）：${sessionId}。不传 sessionId 会自动生成一个。`,
@@ -554,7 +597,16 @@ export async function write(conversation, options = {}) {
     error.code = 'bad-id';
     throw error;
   }
-  const file = path.join(projectsRoot(env), project, `${sessionId}.jsonl`);
+  const root = projectsRoot(env);
+  // A round trip stays in the folder the session already lives in, so the same
+  // id can never appear twice under two projects.
+  const project = options.targetProject
+    ?? (originId === undefined ? undefined : existingProjectDir(root, sessionId))
+    ?? encodeProjectDir(cwd, env);
+  if (originId !== undefined) {
+    notes.push(`该会话原本就是从 WorkBuddy 导入的，本次写回原会话 ${sessionId}（不新建副本）`);
+  }
+  const file = path.join(root, project, `${sessionId}.jsonl`);
   const wantsWrite = options.dryRun === false;
 
   const built = buildRows(conversation, {

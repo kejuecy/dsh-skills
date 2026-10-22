@@ -13,6 +13,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { writeSession } from '../lib/host/writer.js';
+import { persistConversation } from '../lib/host/reimport.js';
 
 /** A conversation with one prompt and one reply. */
 function conversation(question = '问题', answer = '回答') {
@@ -239,4 +240,27 @@ test('a symlinked transcript is refused', async () => {
   assert.equal(result.replaced, false, 'a symlink must never be followed');
   assert.equal(fs.existsSync(path.join(real, 'session.v4.jsonl.zstd')), true, 'the target survives');
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a re-import of an open session imports beside it and explains 未分类', async () => {
+  // The live session owns its log and flushes its in-memory copy back over any
+  // disk write, so it can never be appended to. The import therefore lands as a
+  // second session — the source's new turns are kept — and the result row states
+  // both consequences: the old copy stays, and a source without a real project
+  // directory can only be grouped as 未分类.
+  const persistence = mockPersistence();
+  const result = await persistConversation(persistence, conversation(), {
+    cwd: 'C:////////proj',
+    mode: 'full',
+    sourceLabel: 'WorkBuddy',
+    knownSessionId: 'session-open-1',
+    isOpen: true,
+  });
+
+  assert.equal(result.reason, 'open');
+  assert.equal(result.skipped, undefined, 'a new session is written, not skipped');
+  assert.ok(result.written !== null && result.written.sessionId !== 'session-open-1', 'the new id must differ');
+  assert.equal(persistence.calls.length, 1, 'exactly one new session is created');
+  assert.match(result.warnings[0], /已导入为新会话/);
+  assert.match(result.warnings[1], /未分类/);
 });

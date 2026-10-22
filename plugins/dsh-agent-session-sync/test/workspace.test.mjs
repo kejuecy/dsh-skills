@@ -18,32 +18,40 @@ import { ImportService } from '../lib/host/service.js';
 
 /** A workspace registry stand-in: reuse by path, attach records the call. */
 function fakeRegistry(initialPaths = []) {
-  const entities = initialPaths.map((dir, index) => ({
-    id: `ws-${index + 1}`,
-    path: dir,
-    title: path.basename(dir),
-    attached: [],
-    async attachSession(sessionId) {
-      this.attached.push(sessionId);
-    },
-  }));
+  const entities = initialPaths.map((dir, index) => makeEntity(`ws-${index + 1}`, dir, path.basename(dir)));
   return {
     entities,
     list: () => entities,
     async create(dir, title) {
       const existing = entities.find((entity) => entity.path === dir);
       if (existing !== undefined) return existing;
-      const entity = {
-        id: `ws-${entities.length + 1}`,
-        path: dir,
-        title,
-        attached: [],
-        async attachSession(sessionId) {
-          this.attached.push(sessionId);
-        },
-      };
+      const entity = makeEntity(`ws-${entities.length + 1}`, dir, title);
       entities.push(entity);
       return entity;
+    },
+  };
+}
+
+/** One workspace stand-in with the surface the real entity exposes. */
+function makeEntity(id, dir, title) {
+  return {
+    id,
+    path: dir,
+    title,
+    attached: [],
+    detached: [],
+    members: [],
+    /** The real DSH getter returns only members it can still validate. */
+    get sessionIds() {
+      return this.members;
+    },
+    async attachSession(sessionId) {
+      this.attached.push(sessionId);
+      if (!this.members.includes(sessionId)) this.members.push(sessionId);
+    },
+    async detachSession(sessionId) {
+      this.detached.push(sessionId);
+      this.members = this.members.filter((member) => member !== sessionId);
     },
   };
 }
@@ -165,6 +173,72 @@ test('a profile without a workspace service reports it instead of throwing', asy
   try {
     const result = await service.attachToWorkspace('session-q', { cwd: dir });
     assert.equal(result.error, '当前 DSH 组合没有工作区服务');
+  } finally {
+    restore();
+  }
+});
+
+test('a membership the sidebar has filtered out is healed by detach + attach', async () => {
+  // DSH lists a workspace's members through its own cwd index, and
+  // `attachSession` returns early for an id that is already a member — so a
+  // session whose header cwd changed stays "attached but invisible" and shows
+  // up under 未分类 forever. Re-attaching by way of a detach is the only repair.
+  const dir = projectDir('DeepHarness');
+  const sessionId = 'session-stale';
+  const entity = makeEntity('ws-stale', dir, 'DeepHarness');
+  entity.members = [sessionId]; // it *is* a member…
+  const hidden = new Set([sessionId]); // …but the registry still hides it
+  Object.defineProperty(entity, 'sessionIds', {
+    get() {
+      return this.members.filter((member) => !hidden.has(member));
+    },
+  });
+  entity.attachSession = async function attach(sessionId2) {
+    this.attached.push(sessionId2);
+    if (!this.members.includes(sessionId2)) this.members.push(sessionId2);
+  };
+  entity.detachSession = async function detach(sessionId2) {
+    this.detached.push(sessionId2);
+    hidden.delete(sessionId2); // detaching clears the stale index entry
+  };
+  const registry = { entities: [entity], list: () => [entity], async create() { return entity; } };
+  const { service, restore } = serviceWith(registry);
+  try {
+    const result = await service.attachToWorkspace(sessionId, { cwd: dir });
+    assert.deepEqual(entity.detached, [sessionId], 'the stale membership must be dropped first');
+    assert.deepEqual(entity.attached, [sessionId, sessionId], 'attach runs again after the detach');
+    assert.equal(result.error, null, 'the repaired membership is reported as grouped');
+  } finally {
+    restore();
+  }
+});
+
+test('a workspace that never accepts the session is reported, not silently ungrouped', async () => {
+  const dir = projectDir('DeepHarness');
+  const entity = makeEntity('ws-refuse', dir, 'DeepHarness');
+  Object.defineProperty(entity, 'sessionIds', { get: () => [] }); // always filtered out
+  const registry = { entities: [entity], list: () => [entity], async create() { return entity; } };
+  const { service, restore } = serviceWith(registry);
+  try {
+    const result = await service.attachToWorkspace('session-refused', { cwd: dir });
+    assert.match(result.error, /未分类/, 'the user must learn where the session ended up');
+  } finally {
+    restore();
+  }
+});
+
+test('a session is dropped from every workspace except the one that owns its cwd', async () => {
+  const dir = projectDir('DeepHarness');
+  const other = projectDir('另一个项目');
+  const registry = fakeRegistry([other, dir]);
+  const [stray, owner] = registry.entities;
+  stray.members = ['session-moved']; // stale membership from an older cwd
+  const { service, restore } = serviceWith(registry);
+  try {
+    const result = await service.attachToWorkspace('session-moved', { cwd: dir });
+    assert.equal(result.error, null);
+    assert.deepEqual(stray.detached, ['session-moved'], 'the wrong workspace must let go');
+    assert.deepEqual(owner.members, ['session-moved']);
   } finally {
     restore();
   }

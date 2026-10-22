@@ -21,6 +21,7 @@
 import { listDshConversations, loadDshConversation, scanDshSessions } from './dsh-source.js';
 import { sinkById, sinkLabels, sinks } from './sinks/registry.js';
 import { ImportJobs } from './jobs.js';
+import { ImportedState, resolveDshHome } from './state.js';
 
 /** A RemoteResult-style failure. */
 function failure(code, message, details = {}) {
@@ -54,6 +55,32 @@ function text(value) {
  */
 function idVariants(id) {
   return id.startsWith('session-') ? [id, id.slice('session-'.length)] : [id, `session-${id}`];
+}
+
+/**
+ * The id a conversation used to have inside the export target.
+ *
+ * A session imported *from* WorkBuddy still belongs to the WorkBuddy
+ * conversation it came from, but import hands it a fresh DSH uuid (see
+ * `state.js`). Deriving the target id from that uuid therefore writes a second
+ * session beside the original every time a conversation makes the round trip —
+ * exactly the duplicate users reported. The import map is the only record of
+ * the original id, so read it here and hand that id to the sink, which keeps
+ * the final say on whether the shape is usable.
+ *
+ * @param sessionId - DSH session id being exported.
+ * @param targetId - sink id, which matches the provider id it was imported from.
+ * @returns the original id, or undefined when the session is native to DSH (or
+ *   came from a different app).
+ */
+function originIdFor(sessionId, targetId) {
+  try {
+    const origin = new ImportedState(resolveDshHome()).findBySession(sessionId);
+    return origin !== undefined && origin.source === targetId ? origin.remoteId : undefined;
+  } catch {
+    // A missing or corrupt map must never block an export that used to work.
+    return undefined;
+  }
 }
 
 /** The host-side exporter. */
@@ -194,6 +221,13 @@ export class ExportService {
       conversation = loadDshConversation(sourceId);
     } catch (error) {
       return failure('source-unreadable', error instanceof Error ? error.message : String(error));
+    }
+
+    // Round trip: write the conversation back onto the session it came from
+    // instead of creating a second one with the same title beside it.
+    if (options.sessionId === undefined) {
+      const originId = originIdFor(conversation.id, sink.id);
+      if (originId !== undefined) options.originId = originId;
     }
 
     try {

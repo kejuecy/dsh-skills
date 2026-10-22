@@ -4,9 +4,31 @@
  * The map lives in `$DSH_HOME/session-import/imported.json` and is written
  * atomically after every successful import. State produced before multiple
  * sources existed (bare Cursor ids) is migrated in place on load.
+ *
+ * The exporter reads the same file in the opposite direction (`findBySession`)
+ * so a session can be written *back* to the conversation it came from instead
+ * of piling a second copy beside it.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+
+/** Resolve the DeepSeek Harness home the same way the CLI does. */
+export function resolveDshHome(env = process.env) {
+  const configured = typeof env.DSH_HOME === 'string' ? env.DSH_HOME.trim() : '';
+  return configured === '' ? join(homedir(), '.dsh') : configured;
+}
+
+/**
+ * One session id with its optional `session-` prefix removed.
+ * @param id - stored or reported session id.
+ * @returns comparable key (empty string when there is nothing to compare).
+ */
+function normalizeSessionKey(id) {
+  const raw = typeof id === 'string' ? id.trim() : '';
+  if (raw === '') return '';
+  return /^session-/i.test(raw) ? raw.slice('session-'.length) : raw;
+}
 
 /** Provider id assumed by the legacy bare-id state format. */
 export const LEGACY_PROVIDER_ID = 'cursor';
@@ -63,6 +85,41 @@ export class ImportedState {
    */
   get(key) {
     return this.entries[key];
+  }
+
+  /**
+   * The third-party conversation one DSH session was imported from.
+   *
+   * Import mints a fresh DSH id, so this map is the only place that still
+   * remembers which conversation a session came from — the reverse direction
+   * of `get()`. The exporter needs it: writing a session back under a *new*
+   * target id is what left two identical-looking sessions in the target app,
+   * because the original one was never touched.
+   *
+   * @param sessionId - DSH session id (`session-<uuid>`).
+   * @returns `{ source, remoteId, key, …entry }`, or undefined when the session
+   *   was created natively (nothing to go back to).
+   */
+  findBySession(sessionId) {
+    const target = normalizeSessionKey(sessionId);
+    if (target === '') return undefined;
+    for (const [key, entry] of Object.entries(this.entries)) {
+      if (entry === null || typeof entry !== 'object') continue;
+      // Stored ids and the ids the session list reports disagree on the
+      // `session-` prefix (native folders use the bare uuid), so compare the
+      // normalized form rather than the raw string.
+      if (normalizeSessionKey(entry.sessionId) !== target) continue;
+      const marker = key.indexOf(':');
+      const source = typeof entry.source === 'string' && entry.source !== ''
+        ? entry.source
+        : marker > 0 ? key.slice(0, marker) : '';
+      const remoteId = typeof entry.remoteId === 'string' && entry.remoteId !== ''
+        ? entry.remoteId
+        : marker > 0 ? key.slice(marker + 1) : '';
+      if (remoteId === '') continue;
+      return { ...entry, source, remoteId, key };
+    }
+    return undefined;
   }
 
   /**

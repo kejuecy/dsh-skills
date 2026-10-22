@@ -10,8 +10,9 @@
  *
  *  1. no previous session → plain create;
  *  2. the previous session is open in the harness → never touch it (its
- *     in-memory copy is flushed back over any disk write), import a new session
- *     and say why;
+ *     in-memory copy is flushed back over any disk write), import beside it as a
+ *     new session and say why — including that a source without a project
+ *     directory can only appear under 「未分类」;
  *  3. otherwise merge: append only the turns the source gained. Nothing is
  *     deleted, so a local continuation written in DSH survives, and a merge
  *     that finds nothing new writes nothing at all;
@@ -23,6 +24,7 @@
  * turn the user had written locally since.
  */
 import { mergeIntoSession } from './merge.js';
+import { sourceProjectDirectory } from './platform.js';
 import { writeSession } from './writer.js';
 
 /**
@@ -46,10 +48,11 @@ export const MERGE_REFUSAL = {
  * @param persistence - `ctx.sessionPersistence`.
  * @param conversation - normalized conversation to write.
  * @param options - `{ cwd, mode, sourceLabel, knownSessionId?, isOpen?, allowMerge? }`.
- * @returns `{ written, merged, addedTurns, warnings, reason }`; `written` is
- *   the `writeSession` / `mergeIntoSession` result the caller reports on, and
- *   `reason` names the branch that was taken (`created`, `open`, `busy`,
- *   `conflict`, `merged`, `replaced` or `rewritten`).
+ * @returns `{ written, merged, addedTurns, warnings, reason, skipped? }`;
+ *   `written` is the `writeSession` / `mergeIntoSession` result the caller
+ *   reports on (`null` when nothing was written on purpose), `skipped` marks
+ *   that case, and `reason` names the branch that was taken (`created`, `open`,
+ *   `busy`, `conflict`, `merged`, `replaced` or `rewritten`).
  */
 export async function persistConversation(persistence, conversation, options = {}) {
   const base = { cwd: options.cwd, mode: options.mode, sourceLabel: options.sourceLabel };
@@ -65,7 +68,17 @@ export async function persistConversation(persistence, conversation, options = {
     };
   }
   if (options.isOpen === true) {
-    warnings.push('原会话正在打开：无法追加合并，已导入为新会话；关闭原会话后可手动删除旧的');
+    // A live session keeps its own copy of the transcript and flushes it back on
+    // the next write, so appending to the stored log would be silently undone
+    // (and could corrupt the open conversation). The import therefore lands
+    // beside it as a *new* session — nothing the source gained is lost — and the
+    // result row spells out the two consequences the user would otherwise have
+    // to reverse-engineer: the original was untouched (so they now have two),
+    // and a source without a project directory can only be grouped as 「未分类」.
+    warnings.push('原会话正在 DSH 里打开：无法合并，已导入为新会话（原会话未改动）；关掉原会话后可手动删掉多余的那条');
+    if (sourceProjectDirectory(conversation.cwd) === undefined) {
+      warnings.push('来源会话的 cwd 是用户主目录或已不存在（没有项目目录），这条新会话在侧边栏会显示在「未分类」');
+    }
     return {
       written: await writeSession(persistence, conversation, base),
       merged: false,

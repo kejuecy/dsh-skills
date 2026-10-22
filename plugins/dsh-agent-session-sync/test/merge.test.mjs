@@ -414,7 +414,11 @@ test('a session open in the harness is never written to', async () => {
   assert.equal(outcome.reason, 'open');
   assert.notEqual(outcome.written.sessionId, written.sessionId, 'a fresh session is used');
   assert.equal(persistence.events(written.sessionId).length, before, 'the open one is untouched');
-  assert.match(outcome.warnings.join(), /正在打开/);
+  // The user must be told both consequences: the old copy is still there, and
+  // (when the source names no real project directory) the new one can only be
+  // grouped as 未分类.
+  assert.match(outcome.warnings.join(), /已导入为新会话/);
+  assert.match(outcome.warnings.join(), /未分类/);
 });
 
 test('a plain re-import merges instead of replacing', async () => {
