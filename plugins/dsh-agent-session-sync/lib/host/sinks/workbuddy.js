@@ -288,7 +288,7 @@ export async function status(env = process.env) {
 }
 
 /** Build a valid `sessions` row matching WorkBuddy's own defaults. */
-function buildSessionRow({ sessionId, cwd, title, at, userId }) {
+function buildSessionRow({ sessionId, cwd, title, at, userId, permissionMode }) {
   return {
     id: sessionId,
     cwd,
@@ -308,7 +308,12 @@ function buildSessionRow({ sessionId, cwd, title, at, userId }) {
     expert_runtime_identity: null,
     last_activity_at: at,
     expert_marketplace: null,
-    permission_mode: 'default',
+    // WorkBuddy reads the session's permission level from this column, and a
+    // row without it lands on `default`, where every tool call waits for an
+    // approval the imported transcript cannot answer — the session then looks
+    // broken ("agent commands don't run"). An imported session is meant to be
+    // continued, so it defaults to the same level as a normal WorkBuddy session.
+    permission_mode: permissionMode ?? 'fullAccess',
     use_sandbox_cli: 1,
     project_id: null,
     mode: 'craft',
@@ -637,12 +642,22 @@ export async function write(conversation, options = {}) {
   const db = new sqlite.DatabaseSync(index.dbPath);
   try {
     db.exec('BEGIN IMMEDIATE');
+    // Keep a level the user picked inside WorkBuddy; only a fresh import (or a
+    // row that never had one) gets the full-access default.
+    let existingMode = null;
+    try {
+      const prior = db.prepare('SELECT permission_mode FROM sessions WHERE id = ?').get(sessionId);
+      if (typeof prior?.permission_mode === 'string' && prior.permission_mode !== '') existingMode = prior.permission_mode;
+    } catch {
+      // A schema without the column simply keeps the default.
+    }
     const row = buildSessionRow({
       sessionId,
       cwd,
       title: built.title,
       at: millis(conversation.createdAt),
       userId: index.userId,
+      permissionMode: existingMode,
     });
     const cols = Object.keys(row);
     db.prepare(
