@@ -264,3 +264,76 @@ test('a re-import of an open session imports beside it and explains 未分类', 
   assert.match(result.warnings[0], /已导入为新会话/);
   assert.match(result.warnings[1], /未分类/);
 });
+
+/** A conversation of `count` turns, each carrying a large tool result. */
+function bulkyConversation(count) {
+  return {
+    ...conversation('问题', '回答'),
+    turns: Array.from({ length: count }, (_, index) => ({
+      at: 1_700_000_001_000 + index * 1_000,
+      user: { content: [{ type: 'text', text: `第 ${index + 1} 轮问题` }] },
+      runs: [
+        {
+          at: 1_700_000_001_500 + index * 1_000,
+          blocks: [
+            { type: 'reasoning', text: `先想一想第 ${index + 1} 轮` },
+            { type: 'text', text: `回答 ${index + 1}` },
+            { type: 'tool-call', id: `call_${index}`, name: 'read_file', arguments: '{"path":"big.log"}' },
+          ],
+          toolResults: [{ callId: `call_${index}`, name: 'read_file', arguments: '{"path":"big.log"}', output: 'x'.repeat(4_000) }],
+        },
+      ],
+    })),
+  };
+}
+
+test('a first import over the context ceiling is compressed before it is written', async () => {
+  // A transcript larger than the window produces a session that fails on the
+  // very first prompt after the import, so it has to be compressed on the way in
+  // and the result row has to say what happened to it.
+  const persistence = mockPersistence();
+  const source = bulkyConversation(24);
+  const result = await persistConversation(persistence, source, {
+    cwd: 'C://proj',
+    mode: 'full',
+    sourceLabel: 'Codex',
+    compress: { limit: 6_000, reserve: 1_000 },
+  });
+
+  assert.equal(result.reason, 'created');
+  assert.equal(result.compression.compressed, true);
+  assert.ok(result.compression.after < result.compression.before);
+  assert.ok(result.warnings.some((warning) => /已压缩到约/.test(warning)), result.warnings.join(' | '));
+
+  const events = persistence.sessions.get(result.written.sessionId);
+  const stored = JSON.stringify(events);
+  assert.ok(stored.includes('【历史已压缩】'), 'the transcript must explain the gap');
+  assert.ok(stored.length < JSON.stringify(source).length / 2, 'the stored log must be much smaller than the source');
+});
+
+test('a compressed session is rewritten whole instead of merged on re-import', async () => {
+  // Its stored turns are a rewrite of the source, so the common-prefix compare
+  // finds nothing and an append would copy the conversation in a second time.
+  const persistence = mockPersistence();
+  const first = await persistConversation(persistence, bulkyConversation(24), {
+    cwd: 'C://proj',
+    mode: 'full',
+    compress: { limit: 6_000, reserve: 1_000 },
+  });
+  assert.equal(first.compression.compressed, true);
+  const sessionId = first.written.sessionId;
+
+  const second = await persistConversation(persistence, bulkyConversation(26), {
+    cwd: 'C://proj',
+    mode: 'full',
+    compress: { limit: 6_000, reserve: 1_000 },
+    knownSessionId: sessionId,
+    knownCompressed: true,
+  });
+
+  assert.equal(second.reason, 'replaced');
+  assert.equal(second.merged, false);
+  assert.equal(second.written.sessionId, sessionId, 'the same session is reused');
+  assert.equal(persistence.sessions.size, 1, 'no duplicate may be left behind');
+  assert.match(second.warnings.join('；'), /压缩导入/);
+});

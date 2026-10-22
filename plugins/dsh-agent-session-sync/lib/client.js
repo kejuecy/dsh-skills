@@ -127,6 +127,8 @@ var zh = {
   listSummary: "{total} \u6761\u5BF9\u8BDD\uFF0C{imported} \u6761\u5DF2\u5BFC\u5165",
   lastScan: "\u4E0A\u6B21\u626B\u63CF\uFF1A{time}",
   modeInfo: "\u5B8C\u6574\u4FDD\u771F\uFF1A\u7ED3\u6784\u5316\u601D\u8003/\u5DE5\u5177\u5361\u7247\uFF0C\u9002\u5408\u9605\u8BFB\u3002\u63A5\u7EED\u53CB\u597D\uFF1A\u5185\u5BB9\u4EE5\u6587\u672C\u4FDD\u7559\u3001\u53BB\u6389 tool/thinking \u7ED3\u6784\uFF0C\u4EFB\u4F55\u6A21\u578B\u90FD\u80FD\u5B89\u5168\u7EED\u804A\u3002",
+  compressLabel: "\u8D85\u957F\u81EA\u52A8\u538B\u7F29",
+  compressHint: "\u5386\u53F2\u8D85\u8FC7\u6A21\u578B\u4E0A\u4E0B\u6587\u4E0A\u9650\uFF08\u7EA6 100 \u4E07 tokens\uFF0C\u5176\u4E2D 25.6 \u4E07\u7559\u7ED9\u8F93\u51FA\uFF09\u65F6\uFF0C\u5148\u538B\u7F29\u518D\u5199\u5165\uFF1A\u622A\u65AD\u8D85\u957F\u5DE5\u5177\u8F93\u51FA\u3001\u53BB\u6389\u601D\u8003\u8FC7\u7A0B\uFF1B\u4ECD\u4E0D\u591F\u5C31\u7CBE\u7B80\u4E2D\u95F4\u56DE\u5408\u7684\u5DE5\u5177\u7EC6\u8282\uFF08\u6BCF\u8F6E\u8BC9\u6C42\u4E0E\u7ED3\u8BBA\u7167\u7559\uFF09\uFF0C\u518D\u4E0D\u591F\u624D\u7701\u7565\u4E2D\u6BB5\u5E76\u9010\u8F6E\u7559\u4E0B\u300C\u8BC9\u6C42 \u2192 \u7ED3\u8BBA\u300D\u6458\u8981\u3002\u5B8C\u6574\u539F\u6587\u4ECD\u5728\u6765\u6E90 agent \u91CC\u3002\u5173\u95ED\u540E\u6309\u539F\u6837\u5199\u5165\uFF0C\u8D85\u957F\u4F1A\u8BDD\u53EF\u80FD\u4E00\u7EED\u804A\u5C31\u62A5\u4E0A\u4E0B\u6587\u8D85\u9650\u3002",
   expandAllHint: "\u5C55\u5F00\u5168\u90E8\u9879\u76EE",
   collapseAllHint: "\u6536\u8D77\u5168\u90E8\u9879\u76EE",
   groupCount: "{n} \u6761\u5BF9\u8BDD",
@@ -229,6 +231,8 @@ var en = {
   listSummary: "{total} conversations, {imported} imported",
   lastScan: "Last scan: {time}",
   modeInfo: "Faithful keeps structured reasoning and tool-call cards, best for reading. Resume-safe keeps the same content as text without tool/thinking wire structure, so any model can continue safely.",
+  compressLabel: "Compress long history",
+  compressHint: "When a transcript exceeds the model context window (about 1M tokens, 256k of which the agent reserves for its answer), it is compressed before writing: oversized tool output is clamped and reasoning is dropped; if that is still not enough the older turns keep their prompt and answer but lose tool detail, and only as a last resort is the middle elided, replaced by a per-turn ask \u2192 conclusion digest. The full transcript stays in the source agent. Turning this off writes the history verbatim \u2014 such a session may fail on the first prompt.",
   expandAllHint: "Expand all projects",
   collapseAllHint: "Collapse all projects",
   groupCount: "{n} conversations",
@@ -662,6 +666,20 @@ function ExportPanel(props) {
   const [sourceId, setSourceId] = react3.useState("");
   const [targetId, setTargetId] = react3.useState("");
   const [mode, setMode] = react3.useState("full");
+  const [compress, setCompressInner] = react3.useState(() => {
+    try {
+      return globalThis.localStorage?.getItem("session-export:compress") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const setCompress = react3.useCallback((next) => {
+    setCompressInner(next);
+    try {
+      globalThis.localStorage?.setItem("session-export:compress", next ? "auto" : "off");
+    } catch {
+    }
+  }, []);
   const [search, setSearch] = react3.useState("");
   const [plan, setPlan] = react3.useState({ phase: "idle", key: "", data: null, error: "" });
   const [written, setWritten] = react3.useState(false);
@@ -720,7 +738,8 @@ function ExportPanel(props) {
   react3.useEffect(() => {
     void loadSources(scope.available ? scope.ids : null);
   }, [scopeKey, loadSources]);
-  const planKey = `${sourceId}\0${targetId}\0${mode}`;
+  const compressMode = compress ? "auto" : "off";
+  const planKey = `${sourceId}\0${targetId}\0${mode}\0${compressMode}`;
   react3.useEffect(() => {
     setError("");
     if (sourceId === "" || targetId === "") {
@@ -743,6 +762,7 @@ function ExportPanel(props) {
           sourceId,
           targetId,
           mode,
+          compress: compressMode,
           overwrite: true,
           confirm: false
         });
@@ -754,7 +774,7 @@ function ExportPanel(props) {
       }
     }, PLAN_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [planKey, sourceId, targetId, mode]);
+  }, [planKey, sourceId, targetId, mode, compressMode]);
   const sourceList = Array.isArray(sources.data) ? sources.data : [];
   const needle = search.trim().toLowerCase();
   const visibleSources = needle === "" ? sourceList : sourceList.filter(
@@ -770,7 +790,7 @@ function ExportPanel(props) {
     setBusy(true);
     setError("");
     try {
-      const value = await callExport("export", { sourceId, targetId, mode, overwrite: true, confirm: true });
+      const value = await callExport("export", { sourceId, targetId, mode, compress: compressMode, overwrite: true, confirm: true });
       setPlan({ phase: "ready", key: planKey, data: value ?? null, error: "" });
       setWritten(true);
       if (typeof props.loadList === "function") props.loadList(true);
@@ -864,7 +884,17 @@ function ExportPanel(props) {
             { className: "ci-list", role: "radiogroup" },
             targetList.map((item) => h3(TargetCard, { key: item.id, target: item, selected: item.id === targetId, onSelect: setTargetId, t }))
           ),
-          h3("div", { className: "ci-export-options" }, modeControl)
+          h3(
+            "div",
+            { className: "ci-export-options" },
+            modeControl,
+            h3(
+              "label",
+              { className: "ci-toggle", title: t("compressHint") },
+              h3(P3.Checkbox, { checked: compress, onChange: () => setCompress(!compress) }),
+              h3("span", null, t("compressLabel"))
+            )
+          )
         )
       ),
       // The plan sits under both columns: it describes the *pair*, not either side.
@@ -939,6 +969,20 @@ function SessionImportPanel(props) {
     setImportModeInner(mode);
     try {
       globalThis.localStorage?.setItem("session-import:mode", mode);
+    } catch {
+    }
+  }, []);
+  const [importCompress, setImportCompressInner] = react4.useState(() => {
+    try {
+      return globalThis.localStorage?.getItem("session-import:compress") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const setImportCompress = react4.useCallback((next) => {
+    setImportCompressInner(next);
+    try {
+      globalThis.localStorage?.setItem("session-import:compress", next ? "auto" : "off");
     } catch {
     }
   }, []);
@@ -1099,14 +1143,17 @@ function SessionImportPanel(props) {
     });
     setNotice(null);
     try {
-      const started = await rpc("import", { items, options: { mode: importMode } });
+      const started = await rpc("import", {
+        items,
+        options: { mode: importMode, compress: importCompress ? "auto" : "off" }
+      });
       setModalOpen(true);
       setCancelling(false);
       setJob({ jobId: started.jobId, status: null });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : String(error));
     }
-  }, [rpc, importMode]);
+  }, [rpc, importMode, importCompress]);
   const cancelImport = react4.useCallback(async () => {
     if (job === null || job.jobId === void 0) return;
     setCancelling(true);
@@ -1396,6 +1443,15 @@ function SessionImportPanel(props) {
             { className: "ci-foot-actions" },
             modeControl,
             h4("span", { className: "ci-hint", title: t("modeInfo") }, P4.IconInfoOutlineRegular !== void 0 ? h4(P4.IconInfoOutlineRegular, { size: 16 }) : "\u24D8"),
+            // Compression is a separate axis from fidelity: it decides what
+            // happens when the history is bigger than the model can read,
+            // not how faithfully the transcript is shaped.
+            h4(
+              "label",
+              { className: "ci-toggle", title: t("compressHint") },
+              h4(P4.Checkbox, { checked: importCompress, onChange: () => setImportCompress(!importCompress) }),
+              h4("span", null, t("compressLabel"))
+            ),
             h4("span", { className: "ci-group-spacer" }),
             selected.size > 0 ? h4(P4.Button, { variant: "ghost", onClick: () => setSelected(/* @__PURE__ */ new Set()) }, t("clearSelection")) : null,
             // "3 条（2 个项目）" beats "3 条": it tells the user whether the
@@ -1478,6 +1534,7 @@ var CSS = [
   ".ci-foot-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}",
   ".ci-mode{font:inherit;font-size:12px;line-height:18px;cursor:pointer;background:transparent;color:var(--dsw-alias-label-secondary,#5c626b);border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:8px;padding:2px 9px}",
   ".ci-mode.active{color:var(--dsw-alias-label-primary,#1f2329);border-color:currentColor;background:var(--dsw-alias-bg-l2,rgba(0,0,0,.04))}",
+  ".ci-toggle{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary,#5c626b);white-space:nowrap}",
   ".ci-grow{flex:1;min-width:160px}",
   ".ci-meta{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8a919c);white-space:nowrap}",
   ".ci-list{flex:1;min-height:0;overflow:auto;border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:10px}",

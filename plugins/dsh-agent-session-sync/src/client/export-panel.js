@@ -257,6 +257,25 @@ export function ExportPanel(props) {
   const [sourceId, setSourceId] = react.useState('');
   const [targetId, setTargetId] = react.useState('');
   const [mode, setMode] = react.useState('full');
+  /**
+   * Compress the transcript when it is larger than the model window. On by
+   * default: the alternative is a session that cannot be resumed at all.
+   */
+  const [compress, setCompressInner] = react.useState(() => {
+    try {
+      return globalThis.localStorage?.getItem('session-export:compress') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const setCompress = react.useCallback((next) => {
+    setCompressInner(next);
+    try {
+      globalThis.localStorage?.setItem('session-export:compress', next ? 'auto' : 'off');
+    } catch {
+      // Preference only.
+    }
+  }, []);
   const [search, setSearch] = react.useState('');
   /** `{ phase, key, data, error }` — the auto-fetched plan and which inputs it describes. */
   const [plan, setPlan] = react.useState({ phase: 'idle', key: '', data: null, error: '' });
@@ -342,7 +361,8 @@ export function ExportPanel(props) {
    * for this exact key, which is what makes "confirm" honest: the user cannot
    * write a session/target/mode combination they have not been shown.
    */
-  const planKey = `${sourceId}\u0000${targetId}\u0000${mode}`;
+  const compressMode = compress ? 'auto' : 'off';
+  const planKey = `${sourceId}\u0000${targetId}\u0000${mode}\u0000${compressMode}`;
 
   react.useEffect(() => {
     setError('');
@@ -371,6 +391,7 @@ export function ExportPanel(props) {
           sourceId,
           targetId,
           mode,
+          compress: compressMode,
           overwrite: true,
           confirm: false,
         });
@@ -382,7 +403,7 @@ export function ExportPanel(props) {
       }
     }, PLAN_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [planKey, sourceId, targetId, mode]);
+  }, [planKey, sourceId, targetId, mode, compressMode]);
 
   const sourceList = Array.isArray(sources.data) ? sources.data : [];
   const needle = search.trim().toLowerCase();
@@ -408,7 +429,7 @@ export function ExportPanel(props) {
       // the source session, so the backend either creates that session or
       // replaces it in place (backing the old file up first). There is no
       // third outcome to choose between, so the panel does not ask.
-      const value = await callExport('export', { sourceId, targetId, mode, overwrite: true, confirm: true });
+      const value = await callExport('export', { sourceId, targetId, mode, compress: compressMode, overwrite: true, confirm: true });
       setPlan({ phase: 'ready', key: planKey, data: value ?? null, error: '' });
       setWritten(true);
       // The import sidebar shows DSH session counts; a write changes nothing
@@ -536,7 +557,17 @@ export function ExportPanel(props) {
                       h(TargetCard, { key: item.id, target: item, selected: item.id === targetId, onSelect: setTargetId, t })),
                   ),
 
-          h('div', { className: 'ci-export-options' }, modeControl),
+          h(
+            'div',
+            { className: 'ci-export-options' },
+            modeControl,
+            h(
+              'label',
+              { className: 'ci-toggle', title: t('compressHint') },
+              h(P.Checkbox, { checked: compress, onChange: () => setCompress(!compress) }),
+              h('span', null, t('compressLabel')),
+            ),
+          ),
         ),
       ),
 

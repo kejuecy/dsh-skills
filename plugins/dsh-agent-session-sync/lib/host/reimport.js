@@ -22,7 +22,15 @@
  * The predecessor of this module did step 4 unconditionally: re-importing
  * deleted the DSH session and wrote a fresh transcript, which threw away every
  * turn the user had written locally since.
+ *
+ * Every *whole-session* write — a first import, the copy written beside an open
+ * session, a forced rewrite — goes through `compress.js` first, so a transcript
+ * that cannot fit the model's context window is compressed instead of being
+ * imported in a form that fails on the first prompt after the import. Merging
+ * is exempt: it appends only the turns the source gained, and rewriting history
+ * that is already stored is not something an append can do safely.
  */
+import { compressConversation, conversationTokens, describeCompression, formatTokens, resolveBudget } from './compress.js';
 import { mergeIntoSession } from './merge.js';
 import { sourceProjectDirectory } from './platform.js';
 import { writeSession } from './writer.js';
@@ -43,15 +51,36 @@ export const MERGE_REFUSAL = {
 };
 
 /**
+ * Prepare a conversation for a whole-session write.
+ *
+ * Compression is applied here rather than in `service.js` because only this
+ * module knows whether the write is a whole session or an append, and the two
+ * need opposite treatment: a whole write may rewrite history (which is exactly
+ * what compression does), an append must not.
+ *
+ * @param conversation - conversation about to be written whole.
+ * @param options - `{ compress? }` — see `compress.js`.
+ * @param warnings - result-row notes, extended in place.
+ * @returns `{ conversation, report }`.
+ */
+function prepareWrite(conversation, options, warnings) {
+  const { conversation: prepared, report } = compressConversation(conversation, options.compress ?? {});
+  const note = describeCompression(report);
+  if (note !== '') warnings.push(note);
+  return { conversation: prepared, report };
+}
+
+/**
  * Write one conversation, merging into the session a previous import created.
  *
  * @param persistence - `ctx.sessionPersistence`.
  * @param conversation - normalized conversation to write.
- * @param options - `{ cwd, mode, sourceLabel, knownSessionId?, isOpen?, allowMerge? }`.
- * @returns `{ written, merged, addedTurns, warnings, reason, skipped? }`;
+ * @param options - `{ cwd, mode, sourceLabel, compress?, knownSessionId?, knownCompressed?, isOpen?, allowMerge? }`.
+ * @returns `{ written, merged, addedTurns, warnings, reason, compression?, skipped? }`;
  *   `written` is the `writeSession` / `mergeIntoSession` result the caller
  *   reports on (`null` when nothing was written on purpose), `skipped` marks
- *   that case, and `reason` names the branch that was taken (`created`, `open`,
+ *   that case, `compression` is the `compress.js` report of a whole-session
+ *   write, and `reason` names the branch that was taken (`created`, `open`,
  *   `busy`, `conflict`, `merged`, `replaced` or `rewritten`).
  */
 export async function persistConversation(persistence, conversation, options = {}) {
@@ -59,11 +88,13 @@ export async function persistConversation(persistence, conversation, options = {
   const knownSessionId = options.knownSessionId;
   const warnings = [];
   if (knownSessionId === undefined) {
+    const prepared = prepareWrite(conversation, options, warnings);
     return {
-      written: await writeSession(persistence, conversation, base),
+      written: await writeSession(persistence, prepared.conversation, base),
       merged: false,
       addedTurns: null,
       warnings,
+      compression: prepared.report,
       reason: 'created',
     };
   }
@@ -79,23 +110,48 @@ export async function persistConversation(persistence, conversation, options = {
     if (sourceProjectDirectory(conversation.cwd) === undefined) {
       warnings.push('来源会话的 cwd 是用户主目录或已不存在（没有项目目录），这条新会话在侧边栏会显示在「未分类」');
     }
+    const prepared = prepareWrite(conversation, options, warnings);
     return {
-      written: await writeSession(persistence, conversation, base),
+      written: await writeSession(persistence, prepared.conversation, base),
       merged: false,
       addedTurns: null,
       warnings,
+      compression: prepared.report,
       reason: 'open',
     };
   }
-  if (options.allowMerge === false) {
-    warnings.push('已覆盖原会话（按要求未合并）');
+  // A session that was itself written compressed can never be merged: its stored
+  // turns are a rewrite of the source (trimmed blocks, an elided middle), so the
+  // common-prefix comparison finds nothing and an append would copy the whole
+  // conversation in again. Rewriting it whole — compressed again — is the only
+  // correct outcome, and the row says so.
+  if (options.allowMerge === false || options.knownCompressed === true) {
+    const forced = options.allowMerge === false;
+    warnings.push(
+      forced
+        ? '已覆盖原会话（按要求未合并）'
+        : '该会话上次是「压缩导入」的（历史已被改写），无法增量比对，本次整份重写为最新的压缩版本；如果你在 DSH 里对这条会话续聊过，那些回合会丢失',
+    );
+    const prepared = prepareWrite(conversation, options, warnings);
     return {
-      written: await writeSession(persistence, conversation, { ...base, sessionId: knownSessionId, overwrite: true }),
+      written: await writeSession(persistence, prepared.conversation, { ...base, sessionId: knownSessionId, overwrite: true }),
       merged: false,
       addedTurns: null,
       warnings,
+      compression: prepared.report,
       reason: 'replaced',
     };
+  }
+
+  // Appending cannot shrink what is already stored, so a conversation that is
+  // still over the ceiling has to be reported rather than silently merged.
+  const budget = resolveBudget(options.compress ?? {});
+  const tokens = conversationTokens(conversation);
+  if (tokens > budget.target) {
+    warnings.push(
+      `这条会话的历史约 ${formatTokens(tokens)} tokens，已超出模型上下文上限（${formatTokens(budget.budget)}）；` +
+        '本次是增量合并，不会压缩已有历史，在 DSH 里续聊时可能报上下文超限',
+    );
   }
 
   const outcome = await mergeIntoSession(persistence, conversation, { ...base, sessionId: knownSessionId });
@@ -124,11 +180,13 @@ export async function persistConversation(persistence, conversation, options = {
         ? '原会话正在被占用：已导入为新会话；关闭原会话后可手动删除旧的'
         : '原会话在合并过程中被改动：已导入为新会话，未写入原会话；确认无误后可手动删除多的那个',
     );
+    const prepared = prepareWrite(conversation, options, warnings);
     return {
-      written: await writeSession(persistence, conversation, base),
+      written: await writeSession(persistence, prepared.conversation, base),
       merged: false,
       addedTurns: null,
       warnings,
+      compression: prepared.report,
       reason: outcome.reason,
     };
   }
@@ -136,11 +194,12 @@ export async function persistConversation(persistence, conversation, options = {
   // outcomes actually happened — claiming a rewrite while a duplicate sits
   // beside the original would be worse than saying nothing.
   const why = MERGE_REFUSAL[outcome.reason] ?? outcome.reason;
-  const written = await writeSession(persistence, conversation, { ...base, sessionId: knownSessionId, overwrite: true });
+  const prepared = prepareWrite(conversation, options, warnings);
+  const written = await writeSession(persistence, prepared.conversation, { ...base, sessionId: knownSessionId, overwrite: true });
   if (written.sessionId === knownSessionId) {
     warnings.push(`未能合并到原会话（${why}），已整份重写该会话`);
   } else {
     warnings.push(`未能合并到原会话（${why}），也无法覆盖原会话，已导入为新会话；原会话仍保留在列表里，可手动删除`);
   }
-  return { written, merged: false, addedTurns: null, warnings, reason: 'rewritten' };
+  return { written, merged: false, addedTurns: null, warnings, compression: prepared.report, reason: 'rewritten' };
 }

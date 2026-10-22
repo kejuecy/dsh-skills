@@ -95,8 +95,14 @@ export async function write(conversation, options) { ... }
 4. **降级必须留备注。**任何「格式不支持、字段被丢弃、模式被简化」都 `notes.push(...)`。
    静默丢失比报错更糟。
 
-另外两条来自实测的坑：
+另外几条来自实测的坑：
 
+- **上下文压缩在上游完成，sink 不用管。**`export-service.js` 会在调用 `write()` 之前用
+  `compress.js` 把超出模型窗口的会话压到能打开的大小（截断工具输出/正文、丢思考块、
+  必要时省略中段并插入说明消息），所以 sink 拿到的可能是「回合变少」的会话——
+  把它当正常会话写即可，不要假设 `conversation.turns` 与源会话一一对应。
+  自己需要别的阈值时，把 `options.contextLimit` / `options.completionReserve` 透传下去，
+  不要另写一套估算。
 - **会话 id 必须符合目标应用的命名规则。**WorkBuddy 的读取侧只认 UUID 形态的
   文件名，写一个好看的短 id 会得到一个「文件存在但界面永远不显示」的会话。
   这类不合法输入应当**当场抛错**（`error.code = 'bad-id'`），而不是写下去再让人猜。

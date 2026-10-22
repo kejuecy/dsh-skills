@@ -50,6 +50,7 @@ export const CSS = [
       '.ci-foot-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}',
       '.ci-mode{font:inherit;font-size:12px;line-height:18px;cursor:pointer;background:transparent;color:var(--dsw-alias-label-secondary,#5c626b);border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:8px;padding:2px 9px}',
       '.ci-mode.active{color:var(--dsw-alias-label-primary,#1f2329);border-color:currentColor;background:var(--dsw-alias-bg-l2,rgba(0,0,0,.04))}',
+      '.ci-toggle{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary,#5c626b);white-space:nowrap}',
       '.ci-grow{flex:1;min-width:160px}',
       '.ci-meta{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8a919c);white-space:nowrap}',
       '.ci-list{flex:1;min-height:0;overflow:auto;border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:10px}',

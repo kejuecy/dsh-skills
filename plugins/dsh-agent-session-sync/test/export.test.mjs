@@ -966,3 +966,127 @@ test('workbuddy sink ignores an origin id its own reader could not open', async 
   });
   assert.equal(forced.sessionId, explicit);
 });
+
+/** A DSH event log with `count` turns, each holding a 4 000-character tool result. */
+function bulkyEvents(sessionId, cwd, count) {
+  const events = [
+    { type: 'session', version: 4, id: sessionId, createdAt: 1_700_000_000_000, cwd, isSeeded: false, delegationDepth: 0 },
+  ];
+  let seq = 0;
+  let time = 1_700_000_001_000;
+  for (let index = 1; index <= count; index += 1) {
+    const callId = `call_${index}`;
+    const args = '{"command":"cat big.log"}';
+    events.push({ type: 'turn/start', seq: seq++, time, data: { turn: index } });
+    events.push({ type: 'step/start', seq: seq++, time, data: { turn: index, step: 1 } });
+    events.push({
+      type: 'user/message',
+      seq: seq++,
+      time,
+      data: { content: [{ type: 'text', text: `第 ${index} 轮：继续` }], source: { kind: 'user' }, role: 'user', id: `u${index}` },
+      surfaceOp: 'append',
+    });
+    if (index === 1) {
+      events.push({ type: 'session/title', seq: seq++, time, data: { title: '超长会话', messageSeqs: [], source: { kind: 'user' } } });
+    }
+    events.push({
+      type: 'assistant/message',
+      seq: seq++,
+      time: time + 10,
+      data: {
+        turn: index,
+        step: 1,
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: `回答 ${index}` },
+            { type: 'tool-call', id: callId, name: 'bash', arguments: args },
+          ],
+          source: { kind: 'model' },
+          id: `a${index}`,
+        },
+      },
+    });
+    events.push({ type: 'tool/call', seq: seq++, time: time + 10, data: { turn: index, step: 1, callId, name: 'bash', arguments: args } });
+    events.push({
+      type: 'tool/result',
+      seq: seq++,
+      time: time + 20,
+      data: {
+        turn: index,
+        step: 1,
+        message: {
+          role: 'tool',
+          source: { kind: 'tool', callId },
+          toolCallId: callId,
+          content: [{ type: 'text', text: 'x'.repeat(4_000) }],
+          id: `r${index}`,
+        },
+      },
+    });
+    events.push({ type: 'step/end', seq: seq++, time: time + 30, data: { turn: index, step: 1 } });
+    events.push({ type: 'turn/end', seq: seq++, time: time + 30, data: { turn: index, reason: { kind: 'completed' } } });
+    time += 1_000;
+  }
+  return events;
+}
+
+test('exporting a session over the context ceiling compresses it first', async () => {
+  const fx = fixture();
+  withEnv(fx);
+  createWorkbuddyDb(fx.wbHome);
+  writeDshSession(fx.sessions, '--ws--', 'session-big', bulkyEvents('session-big', 'C://proj', 30));
+
+  const service = quietService();
+  const limits = { contextLimit: 8_000, completionReserve: 1_000 };
+
+  // The plan is built from the compressed conversation, so the preview already
+  // reports the reduction instead of describing a write that would not fit.
+  const plan = await service.handle('export', { id: 'session-big', target: 'workbuddy', mode: 'full', confirm: false, ...limits });
+  assert.equal(plan.ok, true, JSON.stringify(plan.error));
+  assert.equal(plan.value.compression.compressed, true);
+  assert.ok(
+    plan.value.notes.some((note) => /已压缩到约/.test(note)),
+    `expected a compression note, got: ${plan.value.notes.join(' | ')}`,
+  );
+
+  const done = await service.handle('export', {
+    id: 'session-big',
+    target: 'workbuddy',
+    mode: 'full',
+    confirm: true,
+    force: true,
+    ...limits,
+  });
+  assert.equal(done.ok, true, JSON.stringify(done.error));
+  const text = fs.readFileSync(done.value.target, 'utf8');
+  assert.ok(text.includes('【历史已压缩】'), 'the written transcript must explain what was elided');
+  assert.ok(text.length < 30 * 4_000, `written ${text.length} characters — expected a large reduction`);
+  service.dispose();
+});
+
+test('turning compression off writes the transcript as it is', async () => {
+  const fx = fixture();
+  withEnv(fx);
+  createWorkbuddyDb(fx.wbHome);
+  writeDshSession(fx.sessions, '--ws--', 'session-raw', bulkyEvents('session-raw', 'C://proj', 10));
+
+  const service = quietService();
+  const done = await service.handle('export', {
+    id: 'session-raw',
+    target: 'workbuddy',
+    mode: 'full',
+    confirm: true,
+    force: true,
+    compress: 'off',
+    contextLimit: 8_000,
+    completionReserve: 1_000,
+  });
+  assert.equal(done.ok, true, JSON.stringify(done.error));
+  assert.equal(done.value.compression.compressed, false);
+  const text = fs.readFileSync(done.value.target, 'utf8');
+  assert.equal(text.includes('【历史已压缩】'), false);
+  // Only clamped by the provider's own per-result ceiling, not by compression.
+  assert.ok(text.length > 10 * 4_000 * 0.9, `written ${text.length} characters — expected the raw transcript`);
+  service.dispose();
+});

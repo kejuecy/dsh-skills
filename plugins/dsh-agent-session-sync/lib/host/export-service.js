@@ -22,6 +22,7 @@ import { listDshConversations, loadDshConversation, scanDshSessions } from './ds
 import { sinkById, sinkLabels, sinks } from './sinks/registry.js';
 import { ImportJobs } from './jobs.js';
 import { ImportedState, resolveDshHome } from './state.js';
+import { compressConversation, describeCompression } from './compress.js';
 
 /** A RemoteResult-style failure. */
 function failure(code, message, details = {}) {
@@ -81,6 +82,28 @@ function originIdFor(sessionId, targetId) {
     // A missing or corrupt map must never block an export that used to work.
     return undefined;
   }
+}
+
+/**
+ * Compression settings carried by an export payload.
+ *
+ * The budget is the DSH agent's own by default — that is the window the session
+ * was written into — and the caller may override it for a target whose model
+ * differs. `compress: 'off'` disables the pass entirely.
+ *
+ * @param raw - flattened export options (nested `options` merged over the body).
+ * @returns `{ policy, limit?, reserve? }` for `compress.js`.
+ */
+function compressOptions(raw) {
+  const number = (value) => {
+    const parsed = typeof value === 'string' ? Number(value.trim()) : value;
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+  };
+  return {
+    policy: raw.compress === 'off' || raw.compress === false ? 'off' : 'auto',
+    limit: number(raw.contextLimit),
+    reserve: number(raw.completionReserve) ?? number(raw.contextReserve),
+  };
 }
 
 /** The host-side exporter. */
@@ -230,13 +253,29 @@ export class ExportService {
       if (originId !== undefined) options.originId = originId;
     }
 
+    // The session is written into an agent whose model has its own window, so a
+    // transcript that no longer fits is compressed *before* it reaches the sink:
+    // writing it whole produces a session that fails on the first prompt after
+    // the import. The dry-run plan is built from the compressed conversation
+    // too, so the preview describes what will actually land on disk.
+    const compressed = compressConversation(conversation, compressOptions(raw));
+    const compressionNote = describeCompression(compressed.report);
+
     try {
-      const result = await sink.write(conversation, options);
+      const result = await sink.write(compressed.conversation, options);
+      if (compressionNote !== '') {
+        result.notes = Array.isArray(result.notes) ? [...result.notes, compressionNote] : [compressionNote];
+      }
       this.ctx.logger.info(
         `dsh-session-export: ${result.dryRun === true ? 'planned' : 'wrote'} ${sourceId} → ${targetId}` +
-          `${result.dryRun === true ? '' : ` (${result.target})`}`,
+          `${result.dryRun === true ? '' : ` (${result.target})`}` +
+          `${compressed.report.compressed === true ? ` [compressed ${compressed.report.before}→${compressed.report.after} tokens]` : ''}`,
       );
-      return success({ ...result, source: { id: conversation.id, title: conversation.title } });
+      return success({
+        ...result,
+        compression: compressed.report,
+        source: { id: conversation.id, title: conversation.title },
+      });
     } catch (error) {
       const code = typeof error?.code === 'string' ? error.code : 'write-failed';
       return failure(code, error instanceof Error ? error.message : String(error));

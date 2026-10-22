@@ -59,6 +59,26 @@ const h = react.createElement;
           // A locked-down storage only costs the preference, not the import.
         }
       }, []);
+      /**
+       * Compress a transcript that is larger than the model window before
+       * writing it. On by default: the alternative is a session that cannot be
+       * resumed at all, and the host reports what it dropped either way.
+       */
+      const [importCompress, setImportCompressInner] = react.useState(() => {
+        try {
+          return globalThis.localStorage?.getItem('session-import:compress') !== 'off';
+        } catch {
+          return true;
+        }
+      });
+      const setImportCompress = react.useCallback((next) => {
+        setImportCompressInner(next);
+        try {
+          globalThis.localStorage?.setItem('session-import:compress', next ? 'auto' : 'off');
+        } catch {
+          // Preference only; the import still works.
+        }
+      }, []);
       const [job, setJob] = react.useState(null);
       const [modalOpen, setModalOpen] = react.useState(false);
       const [cancelling, setCancelling] = react.useState(false);
@@ -230,14 +250,17 @@ const h = react.createElement;
         });
         setNotice(null);
         try {
-          const started = await rpc('import', { items, options: { mode: importMode } });
+          const started = await rpc('import', {
+            items,
+            options: { mode: importMode, compress: importCompress ? 'auto' : 'off' },
+          });
           setModalOpen(true);
           setCancelling(false);
           setJob({ jobId: started.jobId, status: null });
         } catch (error) {
           setNotice(error instanceof Error ? error.message : String(error));
         }
-      }, [rpc, importMode]);
+      }, [rpc, importMode, importCompress]);
 
       const cancelImport = react.useCallback(async () => {
         if (job === null || job.jobId === undefined) return;
@@ -572,6 +595,15 @@ const h = react.createElement;
                 { className: 'ci-foot-actions' },
                 modeControl,
                 h('span', { className: 'ci-hint', title: t('modeInfo') }, P.IconInfoOutlineRegular !== undefined ? h(P.IconInfoOutlineRegular, { size: 16 }) : 'ⓘ'),
+                // Compression is a separate axis from fidelity: it decides what
+                // happens when the history is bigger than the model can read,
+                // not how faithfully the transcript is shaped.
+                h(
+                  'label',
+                  { className: 'ci-toggle', title: t('compressHint') },
+                  h(P.Checkbox, { checked: importCompress, onChange: () => setImportCompress(!importCompress) }),
+                  h('span', null, t('compressLabel')),
+                ),
                 h('span', { className: 'ci-group-spacer' }),
                 selected.size > 0 ? h(P.Button, { variant: 'ghost', onClick: () => setSelected(new Set()) }, t('clearSelection')) : null,
                 // "3 条（2 个项目）" beats "3 条": it tells the user whether the

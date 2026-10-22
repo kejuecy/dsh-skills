@@ -22,6 +22,7 @@ import { ImportJobs } from './jobs.js';
 import { SourceScanner } from './scan.js';
 import { persistConversation } from './reimport.js';
 import { resolveProjectCwd, sourceProjectDirectory } from './platform.js';
+import { conversationTokens, formatTokens, resolveBudget } from './compress.js';
 
 export { importKey } from './state.js';
 
@@ -34,13 +35,7 @@ const WARM_EVENT_LIMIT = 8000;
 /** Import modes exposed by the panel. */
 const IMPORT_MODES = new Set(['full', 'compatible']);
 
-/** Rough context estimate: characters per model token (mixed CN/EN). */
-const CHARS_PER_TOKEN = 3;
-
-/** Full-fidelity transcripts above this estimate get a context warning. */
-const LARGE_TRANSCRIPT_CHARS = 1_200_000;
-
-/** Estimate the model-context size of a normalized conversation. */
+/** Estimate the character count of a normalized conversation (stored metadata). */
 function estimateTranscriptChars(conversation) {
   let chars = 0;
   for (const turn of conversation.turns ?? []) {
@@ -51,6 +46,28 @@ function estimateTranscriptChars(conversation) {
     }
   }
   return chars;
+}
+
+/**
+ * Compression settings carried by an import payload.
+ *
+ * `compress` is `'auto'` unless the caller turns it off; the two numeric
+ * overrides exist for machines whose model differs from the default ceiling.
+ *
+ * @param options - import options from the RPC payload.
+ * @returns `{ policy, limit?, reserve? }` for `compress.js`.
+ */
+function compressOptions(options) {
+  const source = options !== null && typeof options === 'object' ? options : {};
+  const number = (value) => {
+    const parsed = typeof value === 'string' ? Number(value.trim()) : value;
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+  };
+  return {
+    policy: source.compress === 'off' || source.compress === false ? 'off' : 'auto',
+    limit: number(source.contextLimit),
+    reserve: number(source.completionReserve) ?? number(source.contextReserve),
+  };
 }
 
 /** A RemoteResult-style failure. */function failure(code, message, details = {}) {
@@ -304,21 +321,33 @@ export class ImportService {
         } else {
           const cwd = this.resolveCwd(normalized);
           const transcriptChars = estimateTranscriptChars(normalized);
+          const compress = compressOptions(options);
+          const budget = resolveBudget(compress);
+          const tokens = conversationTokens(normalized);
           const warnings = [];
-          if (options.mode !== 'compatible' && transcriptChars > LARGE_TRANSCRIPT_CHARS) {
-            warnings.push(`历史较长（约 ${Math.round(transcriptChars / CHARS_PER_TOKEN / 1000)}k tokens），续聊会占用较多上下文；如需继续对话建议以「接续友好」模式重新导入`);
+          if (compress.policy === 'off' && tokens > budget.target) {
+            warnings.push(
+              `历史约 ${formatTokens(tokens)} tokens，超出模型上下文上限（${formatTokens(budget.budget)}）：` +
+                '本次已关闭自动压缩，续聊可能报上下文超限',
+            );
           }
           // A re-import merges into the session the previous import created:
           // only the turns the source gained are appended, so anything written
           // in DSH in the meantime (a local follow-up, a compaction summary)
           // survives. Deleting and rewriting — the old behaviour — silently
           // destroyed exactly that. `persistConversation` owns the whole policy,
-          // including why a fallback had to be taken.
+          // including why a fallback had to be taken and when a whole-session
+          // write has to be compressed first.
           const outcome = await persistConversation(persistence, normalized, {
             cwd,
             mode: options.mode,
             sourceLabel: provider.label,
+            compress,
             knownSessionId: known?.sessionId,
+            // A session written from a compressed transcript cannot be merged
+            // incrementally (see `reimport.js`); remembering that here is what
+            // keeps a later re-import from appending a second copy of history.
+            knownCompressed: known?.compression?.compressed === true,
             isOpen: known?.sessionId !== undefined && this.isSessionOpen(known.sessionId),
             allowMerge: options.merge !== false,
           });
@@ -368,6 +397,18 @@ export class ImportService {
               // fresh write when reading the row back.
               merged,
               addedTurns,
+              // Compression is a property of the stored transcript, not of this
+              // run: a later re-import has to know it cannot merge (see above).
+              ...(outcome.compression?.compressed === true
+                ? {
+                    compression: {
+                      compressed: true,
+                      before: outcome.compression.before,
+                      after: outcome.compression.after,
+                      droppedTurns: outcome.compression.droppedTurns,
+                    },
+                  }
+                : {}),
             });
             job.results.push({
               source: item.source,
@@ -390,6 +431,10 @@ export class ImportService {
               // Where the sidebar will show it: `null` means "未分组" (the source
               // conversation named no project directory).
               workspace: workspace === null ? null : { title: workspace.title, created: workspace.created },
+              // Token estimate of what was written, and what compression did to
+              // it — the panel can show the number instead of guessing.
+              tokens: outcome.compression?.after ?? tokens,
+              ...(outcome.compression?.compressed === true ? { compression: outcome.compression } : {}),
               ...(warnings.length === 0 ? {} : { warnings }),
             });
           }
