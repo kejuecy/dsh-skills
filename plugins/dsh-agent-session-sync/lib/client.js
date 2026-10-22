@@ -1,0 +1,1657 @@
+/**
+ * Browser half of dsh-agent-session-sync.
+ *
+ * GENERATED FILE — edit src/client/*.js and run `npm run build:client`.
+ *
+ * Running this script only registers a factory; the factory materializes when
+ * the plugin is first imported and returns the plugin exports. Host calls go
+ * through the plugin's own GET/POST routes under `/session-import`.
+ */
+window.__ModuleLoader__.load({
+  id: 'dsh-agent-session-sync',
+  factory: (require) => {
+    var module = { exports: {} };
+    var exports = module.exports;
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/client/index.js
+var index_exports = {};
+__export(index_exports, {
+  NS: () => NS,
+  PANEL_ID: () => PANEL_ID,
+  apply: () => apply,
+  inject: () => inject
+});
+module.exports = __toCommonJS(index_exports);
+
+// src/client/runtime.js
+var P = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+var NS = "sessionImport";
+var PANEL_ID = "session-import";
+var ROUTE_PREFIX = "/session-import";
+var EXPORT_ROUTE_PREFIX = "/session-export";
+var IconChevronDown = P.IconChevronDownOutlineRegular;
+var IconChevronRight = P.IconChevronRightOutlineRegular;
+var IconSearch = P.IconSearchOutlineRegular;
+var primitivesAvailable = {
+  Tag: typeof P.Tag === "function",
+  SegmentedTabs: typeof P.SegmentedTabs === "function",
+  Pill: typeof P.Pill === "function",
+  Button: typeof P.Button === "function"
+};
+
+// src/client/i18n.js
+var zh = {
+  panel: "\u4F1A\u8BDD\u4E92\u5BFC",
+  title: "\u4F1A\u8BDD\u4E92\u5BFC",
+  subtitle: "\u5728\u672C\u673A\u7B2C\u4E09\u65B9 agent \u4E0E DeepSeek Harness \u4E4B\u95F4\u4E92\u76F8\u5BFC\u5165\u5BF9\u8BDD\u3002",
+  refresh: "\u91CD\u65B0\u626B\u63CF",
+  scanning: "\u626B\u63CF\u4E2D\u2026",
+  searchPlaceholder: "\u641C\u7D22\u6807\u9898\u6216\u9879\u76EE\u2026",
+  selectAll: "\u5168\u9009\u672A\u5BFC\u5165",
+  clearSelection: "\u6E05\u7A7A\u9009\u62E9",
+  selected: "\u5DF2\u9009 {n} \u6761",
+  selectedDetail: "\u5DF2\u9009 {n} \u6761\uFF08{g} \u4E2A\u9879\u76EE\uFF09",
+  showAll: "\u5207\u5230\u300C\u5168\u90E8\u300D\u67E5\u770B",
+  start: "\u5F00\u59CB\u5BFC\u5165\uFF08{n}\uFF09",
+  noMatch: "\u6CA1\u6709\u5339\u914D\u7684\u5BF9\u8BDD\u3002",
+  unavailable: "\u8BFB\u53D6 Cursor \u6570\u636E\u5931\u8D25\uFF1A{message}",
+  retry: "\u91CD\u8BD5",
+  imported: "\u5DF2\u5BFC\u5165",
+  archived: "\u5DF2\u5F52\u6863",
+  messages: "{n} \u6761\u6D88\u606F",
+  unknownProject: "\u672A\u77E5\u9879\u76EE",
+  importTitle: "\u6B63\u5728\u5BFC\u5165\u5BF9\u8BDD",
+  importDoneTitle: "\u5BFC\u5165\u5B8C\u6210",
+  importing: "\u6B63\u5728\u5BFC\u5165\u2026",
+  preparing: "\u51C6\u5907\u4E2D\u2026",
+  progress: "{done} / {total}",
+  cancel: "\u53D6\u6D88\u5BFC\u5165",
+  cancelling: "\u6B63\u5728\u53D6\u6D88\u2026",
+  close: "\u5173\u95ED",
+  doneSummary: "\u6210\u529F {ok} \u6761\uFF0C\u5931\u8D25 {fail} \u6761\uFF0C\u8DF3\u8FC7 {skip} \u6761",
+  retryFailed: "\u91CD\u8BD5\u5931\u8D25\u9879",
+  resultOk: "\u6210\u529F",
+  resultSkip: "\u8DF3\u8FC7",
+  resultFail: "\u5931\u8D25",
+  resultReplaced: "\u5DF2\u8986\u76D6\u539F\u4F1A\u8BDD",
+  resultMerged: "\u5DF2\u5408\u5E76\u5230\u539F\u4F1A\u8BDD\uFF0C\u7EED\u63A5 {n} \u4E2A\u56DE\u5408",
+  resultMergedNone: "\u5DF2\u662F\u6700\u65B0\uFF0C\u539F\u4F1A\u8BDD\u6CA1\u6709\u53D8\u5316",
+  resultWorkspace: "\u5DF2\u5F52\u5165\u5DE5\u4F5C\u533A\u300C{name}\u300D",
+  resultWorkspaceNew: "\u5DF2\u65B0\u5EFA\u5DE5\u4F5C\u533A\u300C{name}\u300D",
+  resultUngrouped: "\u672A\u5206\u7EC4\uFF08\u539F\u5BF9\u8BDD\u6CA1\u6709\u5DE5\u4F5C\u533A\u4FE1\u606F\uFF09",
+  afterHint: "\u5BFC\u5165\u540E\u7684\u4F1A\u8BDD\u5DF2\u5F52\u5165\u5DE6\u4FA7\u5BF9\u5E94\u7684\u5DE5\u4F5C\u533A\uFF1B\u539F\u5BF9\u8BDD\u6CA1\u6709\u5DE5\u4F5C\u533A\u4FE1\u606F\u7684\u4F1A\u843D\u5728\u300C\u672A\u5206\u7EC4\u300D\u3002\u5982\u679C\u6CA1\u770B\u5230\uFF0C\u5237\u65B0\u4E00\u4E0B\u9875\u9762\u5373\u53EF\u3002",
+  jobCancelled: "\u5DF2\u53D6\u6D88",
+  sourcesLabel: "\u6765\u6E90",
+  scopeLabel: "\u663E\u793A\u8303\u56F4",
+  scopeUnimported: "\u672A\u5BFC\u5165",
+  scopeAll: "\u5168\u90E8",
+  pickSource: "\u5728\u5DE6\u4FA7\u9009\u62E9\u4E00\u4E2A\u6765\u6E90",
+  scanningSources: "\u6B63\u5728\u626B\u63CF\u672C\u673A\u5BF9\u8BDD\u8BB0\u5F55\u2026",
+  scanningHint: "\u9996\u6B21\u8FDB\u5165\u9700\u8981\u8BFB\u53D6\u5404\u6765\u6E90\u7684\u672C\u5730\u6570\u636E\u5E93\uFF0C\u901A\u5E38\u51E0\u79D2\u5185\u5B8C\u6210\u3002",
+  allImported: "\u8FD9\u4E2A\u6765\u6E90\u7684\u5BF9\u8BDD\u90FD\u5DF2\u5BFC\u5165\uFF0C\u53EF\u5207\u6362\u5230\u300C\u5168\u90E8\u300D\u67E5\u770B\u3002",
+  sourceConversations: "{n} \u6761\u5BF9\u8BDD",
+  modeLabel: "\u5BFC\u5165\u6A21\u5F0F",
+  modeFull: "\u5B8C\u6574\u4FDD\u771F",
+  modeFullHint: "\u4FDD\u7559\u7ED3\u6784\u5316\u601D\u8003\u4E0E\u5DE5\u5177\u8C03\u7528\u5361\u7247\uFF0C\u6700\u9002\u5408\u9605\u8BFB\uFF1B\u7EED\u804A\u65F6\u53EF\u80FD\u53D7\u6A21\u578B API \u5BF9\u5386\u53F2\u5DE5\u5177\u540D/thinking \u7684\u6821\u9A8C\u9650\u5236",
+  modeCompatible: "\u63A5\u7EED\u53CB\u597D",
+  modeCompatibleHint: "\u5185\u5BB9\u4E0D\u4E22\uFF1A\u601D\u8003\u3001\u5DE5\u5177\u8C03\u7528\u4E0E\u7ED3\u679C\u5168\u90E8\u4EE5\u6587\u672C\u4FDD\u7559\uFF0C\u53EA\u53BB\u6389 tool/thinking \u7EBF\u4E0A\u7ED3\u6784\uFF0C\u4EFB\u4F55\u6A21\u578B\u90FD\u80FD\u5B89\u5168\u63A5\u7EED",
+  sourceUnavailable: "\u8BE5\u6765\u6E90\u4E0D\u53EF\u7528",
+  sourceEmpty: "\u8FD9\u4E2A\u6765\u6E90\u6CA1\u6709\u53EF\u5BFC\u5165\u7684\u5BF9\u8BDD",
+  listSummary: "{total} \u6761\u5BF9\u8BDD\uFF0C{imported} \u6761\u5DF2\u5BFC\u5165",
+  lastScan: "\u4E0A\u6B21\u626B\u63CF\uFF1A{time}",
+  modeInfo: "\u5B8C\u6574\u4FDD\u771F\uFF1A\u7ED3\u6784\u5316\u601D\u8003/\u5DE5\u5177\u5361\u7247\uFF0C\u9002\u5408\u9605\u8BFB\u3002\u63A5\u7EED\u53CB\u597D\uFF1A\u5185\u5BB9\u4EE5\u6587\u672C\u4FDD\u7559\u3001\u53BB\u6389 tool/thinking \u7ED3\u6784\uFF0C\u4EFB\u4F55\u6A21\u578B\u90FD\u80FD\u5B89\u5168\u7EED\u804A\u3002",
+  expandAllHint: "\u5C55\u5F00\u5168\u90E8\u9879\u76EE",
+  collapseAllHint: "\u6536\u8D77\u5168\u90E8\u9879\u76EE",
+  groupCount: "{n} \u6761\u5BF9\u8BDD",
+  groupImported: "{n} \u5DF2\u5BFC\u5165",
+  // ── export direction (DSH → other agents) ───────────────────────────
+  tabImport: "\u5BFC\u5165\u5230 DSH",
+  tabExport: "\u5BFC\u5165\u5230\u5176\u4ED6 agent",
+  exportSubtitle: "\u628A\u672C\u673A DSH \u4F1A\u8BDD\u5BFC\u5165\u5230\u672C\u673A\u7684\u7B2C\u4E09\u65B9 agent\u3002",
+  exportSource: "\u8981\u5BFC\u5165\u7684 DSH \u4F1A\u8BDD",
+  exportPageOnly: "\u53EA\u5217\u51FA\u9875\u9762\u4E0A\u7684 {shown} \u4E2A\u4F1A\u8BDD\uFF08\u672C\u673A\u5171 {total} \u4E2A\uFF09",
+  exportPageAll: "\u672A\u80FD\u8BFB\u53D6\u9875\u9762\u4F1A\u8BDD\u5217\u8868\uFF0C\u6682\u5217\u51FA\u672C\u673A\u5168\u90E8 {total} \u4E2A\u4F1A\u8BDD",
+  exportPageEmpty: "\u9875\u9762\u4E0A\u8FD8\u6CA1\u6709\u4F1A\u8BDD\uFF0C\u5148\u53BB\u5DE6\u4FA7\u4F1A\u8BDD\u5217\u8868\u91CC\u5F00\u4E00\u4E2A\u3002",
+  exportTarget: "\u5BFC\u5165\u5230",
+  // No "preview" step: the plan is fetched automatically and the primary
+  // button writes in one click. The copy names the consequence instead.
+  exportPlanTitle: "\u5373\u5C06\u5199\u5165",
+  exportChecking: "\u6B63\u5728\u6838\u5BF9\u5199\u5165\u5185\u5BB9\u2026",
+  exportCheckFail: "\u6838\u5BF9\u5931\u8D25\uFF1A{message}",
+  exportCheckHint: "\u6838\u5BF9\u5931\u8D25\uFF0C\u6682\u65F6\u65E0\u6CD5\u5199\u5165",
+  exportRunTo: "\u5BFC\u51FA\u5230 {target}",
+  exportRunning: "\u6B63\u5728\u5199\u5165\u2026",
+  exportNoSource: "\u5148\u9009\u62E9\u4E00\u4E2A\u8981\u5BFC\u51FA\u7684\u4F1A\u8BDD\u3002",
+  exportNoTarget: "\u8FD9\u53F0\u673A\u5668\u4E0A\u6CA1\u6709\u53EF\u5199\u5165\u7684\u76EE\u6807\u3002",
+  exportModeLabel: "\u5185\u5BB9\u5F62\u5F0F",
+  exportModeFull: "\u5B8C\u6574\u4FDD\u771F",
+  exportModeFlat: "\u7EAF\u6587\u672C",
+  exportModeFullHint: "\u4FDD\u7559\u5DE5\u5177\u8C03\u7528\u4E0E\u7ED3\u679C\u5361\u7247\uFF0C\u9002\u5408\u9605\u8BFB",
+  exportModeFlatHint: "\u628A\u5DE5\u5177\u8C03\u7528\u4E0E\u7ED3\u679C\u5199\u6210\u6B63\u6587\uFF0C\u4EFB\u4F55\u6A21\u578B\u90FD\u80FD\u63A5\u7EED",
+  exportWillCreate: "\u5C06\u65B0\u5EFA\u4F1A\u8BDD",
+  exportWillUpdate: "\u5C06\u66F4\u65B0\u5DF2\u6709\u4F1A\u8BDD",
+  exportCreated: "\u5DF2\u65B0\u5EFA",
+  exportUpdated: "\u5DF2\u66F4\u65B0",
+  exportUpdateNote: "\u8FD9\u6761\u4F1A\u8BDD\u5DF2\u7ECF\u5728 WorkBuddy \u91CC\uFF0C\u5199\u5165\u4F1A\u539F\u5730\u66F4\u65B0\u5B83\uFF1B\u539F\u6587\u4EF6\u4F1A\u5148\u5907\u4EFD\u3002",
+  exportSummary: "\u5199\u5165 {rows} \u884C \xB7 {messages} \u6761\u6D88\u606F",
+  exportBackup: "\u5DF2\u5907\u4EFD\u539F\u6587\u4EF6\uFF1A{path}",
+  exportNoBackup: "\u9996\u6B21\u521B\u5EFA\uFF0C\u65E0\u9700\u5907\u4EFD",
+  exportDoneTitle: "\u5BFC\u5165\u5B8C\u6210",
+  exportFailed: "\u5BFC\u5165\u5931\u8D25\uFF1A{message}",
+  exportSourceLoadFail: "\u8BFB\u53D6 DSH \u4F1A\u8BDD\u5931\u8D25\uFF1A{message}",
+  exportTargetsFail: "\u8BFB\u53D6\u76EE\u6807 agent \u5931\u8D25\uFF1A{message}",
+  exportUnavailable: "\u4E0D\u53EF\u7528"
+};
+var en = {
+  panel: "Session Transfer",
+  title: "Session Transfer",
+  subtitle: "Import conversations between DeepSeek Harness and local third-party agents.",
+  refresh: "Rescan",
+  scanning: "Scanning\u2026",
+  searchPlaceholder: "Search title or project\u2026",
+  selectAll: "Select unimported",
+  clearSelection: "Clear selection",
+  selected: "{n} selected",
+  selectedDetail: "{n} selected ({g} projects)",
+  showAll: "Show all",
+  start: "Import ({n})",
+  noMatch: "No matching conversations.",
+  unavailable: "Could not read Cursor data: {message}",
+  retry: "Retry",
+  imported: "Imported",
+  archived: "Archived",
+  messages: "{n} messages",
+  unknownProject: "Unknown project",
+  importTitle: "Importing conversations\u2026",
+  importDoneTitle: "Import finished",
+  importing: "Importing\u2026",
+  preparing: "Preparing\u2026",
+  progress: "{done} / {total}",
+  cancel: "Cancel import",
+  cancelling: "Cancelling\u2026",
+  close: "Close",
+  doneSummary: "{ok} succeeded, {fail} failed, {skip} skipped",
+  retryFailed: "Retry failed",
+  resultOk: "ok",
+  resultSkip: "skipped",
+  resultFail: "failed",
+  resultReplaced: "replaced previous session",
+  resultMerged: "merged into the previous session, +{n} turns",
+  resultMergedNone: "already up to date",
+  resultWorkspace: "grouped under \u300C{name}\u300D",
+  resultWorkspaceNew: "created workspace \u300C{name}\u300D",
+  resultUngrouped: "ungrouped (the source conversation named no workspace)",
+  afterHint: "Imported sessions are grouped under their workspace in the sidebar; conversations without one land in Ungrouped. Refresh the page if they are not shown yet.",
+  jobCancelled: "Cancelled",
+  sourcesLabel: "Sources",
+  scopeLabel: "Show",
+  scopeUnimported: "Unimported",
+  scopeAll: "All",
+  pickSource: "Pick a source on the left",
+  scanningSources: "Scanning local agent history\u2026",
+  scanningHint: "First launch reads each source's local database; this usually takes a few seconds.",
+  allImported: "Everything in this source is already imported. Switch Show to All to review it.",
+  sourceConversations: "{n} conversations",
+  modeLabel: "Import mode",
+  modeFull: "Faithful",
+  modeFullHint: "Keeps structured reasoning and tool-call cards, best for reading; resumed requests may hit model API limits on foreign tools/thinking",
+  modeCompatible: "Resume-safe",
+  modeCompatibleHint: "Nothing is dropped: reasoning plus tool calls/results are kept as text, only the tool/thinking wire structure is removed, so any model can safely continue",
+  sourceUnavailable: "This source is unavailable",
+  sourceEmpty: "No importable conversations in this source",
+  listSummary: "{total} conversations, {imported} imported",
+  lastScan: "Last scan: {time}",
+  modeInfo: "Faithful keeps structured reasoning and tool-call cards, best for reading. Resume-safe keeps the same content as text without tool/thinking wire structure, so any model can continue safely.",
+  expandAllHint: "Expand all projects",
+  collapseAllHint: "Collapse all projects",
+  groupCount: "{n} conversations",
+  groupImported: "{n} imported",
+  // ── export direction (DSH → other agents) ───────────────────────────
+  tabImport: "Import to DSH",
+  tabExport: "Import to other agent",
+  exportSubtitle: "Import a local DSH session into a third-party agent on this machine.",
+  exportSource: "DSH session to import",
+  exportPageOnly: "Only the {shown} sessions listed on the page ({total} on this machine)",
+  exportPageAll: "Page session list unavailable \u2014 showing all {total} sessions on this machine",
+  exportPageEmpty: "The page has no sessions yet \u2014 open one from the session list first.",
+  exportTarget: "Import into",
+  exportPlanTitle: "About to write",
+  exportChecking: "Checking what will be written\u2026",
+  exportCheckFail: "Could not check: {message}",
+  exportCheckHint: "The check failed, so writing is unavailable",
+  exportRunTo: "Export to {target}",
+  exportRunning: "Writing\u2026",
+  exportNoSource: "Pick a session to export first.",
+  exportNoTarget: "No writable target on this machine.",
+  exportModeLabel: "Content",
+  exportModeFull: "Faithful",
+  exportModeFlat: "Plain text",
+  exportModeFullHint: "Keeps tool-call and result cards, best for reading",
+  exportModeFlatHint: "Renders tool calls and results into the text, resumable by any model",
+  exportWillCreate: "Will create a session",
+  exportWillUpdate: "Will update the existing session",
+  exportCreated: "Created",
+  exportUpdated: "Updated",
+  exportUpdateNote: "This session is already in WorkBuddy; writing updates it in place and backs the old file up first.",
+  exportSummary: "{rows} rows \xB7 {messages} messages",
+  exportBackup: "Previous file backed up to {path}",
+  exportNoBackup: "First creation, no backup needed",
+  exportDoneTitle: "Import finished",
+  exportFailed: "Import failed: {message}",
+  exportSourceLoadFail: "Could not read DSH sessions: {message}",
+  exportTargetsFail: "Could not read target agents: {message}",
+  exportUnavailable: "unavailable"
+};
+
+// src/client/icons.js
+var react = __toESM(require("react"), 1);
+var h = react.createElement;
+var SOURCE_ICONS = {
+  "cursor": "data:image/png;base64,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",
+  "claude-code": "data:image/png;base64,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",
+  "zcode": "data:image/png;base64,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",
+  "kimi": "data:image/png;base64,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",
+  "codex": "data:image/png;base64,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",
+  "workbuddy": "data:image/png;base64,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"
+};
+function SessionImportIcon(props) {
+  const size = props?.size ?? 16;
+  return h(
+    "svg",
+    {
+      width: size,
+      height: size,
+      viewBox: "0 0 16 16",
+      fill: "none",
+      strokeWidth: 1,
+      xmlns: "http://www.w3.org/2000/svg",
+      "aria-hidden": "true"
+    },
+    h("circle", { cx: 8, cy: 8, r: 6, stroke: "currentColor" }),
+    h("path", { d: "M8 4.7v5.6", stroke: "currentColor" }),
+    h("path", { d: "M5.9 8.2 8 10.3l2.1-2.1", stroke: "currentColor" })
+  );
+}
+
+// src/client/panel.js
+var react4 = __toESM(require("react"), 1);
+var P4 = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+
+// src/client/utils.js
+function fmt(text, params) {
+  if (params === void 0) return text;
+  return text.replace(/\{(\w+)\}/g, (whole, key) => params[key] === void 0 ? whole : String(params[key]));
+}
+function formatTime(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+  try {
+    const d = new Date(value);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch {
+    return "";
+  }
+}
+function endpointUrl(endpoint, prefix = ROUTE_PREFIX) {
+  const base = typeof document !== "undefined" && typeof document.baseURI === "string" ? document.baseURI : "http://localhost/";
+  return new URL(`${prefix.replace(/^\/+/, "")}/${endpoint}`, base).toString();
+}
+async function rpcCall(endpoint, payload, prefix = ROUTE_PREFIX) {
+  const response = await fetch(endpointUrl(endpoint, prefix), {
+    method: "POST",
+    // The custom header lets the Host route distinguish this same-origin
+    // plugin caller even when a Desktop proxy rewrites the Origin header.
+    headers: { "content-type": "application/json", "x-dsh-agent-session-sync": "1" },
+    body: JSON.stringify(payload === void 0 ? {} : payload),
+    credentials: "same-origin",
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`HTTP ${response.status}${detail === "" ? "" : `: ${detail.slice(0, 200)}`}`);
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw new Error("Host returned a non-JSON response");
+  }
+  if (body === null || typeof body !== "object" || body.ok !== true) {
+    const failure = body?.error ?? {};
+    throw new Error(typeof failure.message === "string" ? failure.message : "import request failed");
+  }
+  return body.value;
+}
+
+// src/client/components.js
+var react2 = __toESM(require("react"), 1);
+var P2 = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+var h2 = react2.createElement;
+function workspaceSuffix(row, t) {
+  if (row.workspace === void 0) return "";
+  if (row.workspace === null) return " \xB7 " + t("resultUngrouped");
+  const name = typeof row.workspace.title === "string" ? row.workspace.title : "";
+  if (name === "") return "";
+  const key = row.workspace.created === true ? "resultWorkspaceNew" : "resultWorkspace";
+  return " \xB7 " + fmt(t(key), { name });
+}
+function resultDetail(row, t) {
+  if (row.merged === true) {
+    const added = typeof row.addedTurns === "number" ? row.addedTurns : 0;
+    return added > 0 ? fmt(t("resultMerged"), { n: added }) : t("resultMergedNone");
+  }
+  if (row.replaced === true) return t("resultReplaced");
+  return row.sessionId ? row.sessionId.slice(0, 22) : t("resultOk");
+}
+function Badge(props) {
+  const tone = props.tone === "ok" ? "success" : props.tone === "warn" ? "warning" : "neutral";
+  if (primitivesAvailable.Tag) return h2(P2.Tag, { tone }, props.children);
+  return h2("span", { className: "ci-badge" + (props.tone ? " " + props.tone : "") }, props.children);
+}
+function ConversationRow(props) {
+  const { item, checked, onToggle, t, nested } = props;
+  const rowKey = typeof item.key === "string" ? item.key : `${item.source ?? "cursor"}:${item.id}`;
+  const meta = [
+    nested ? null : item.cwdLabel || t("unknownProject"),
+    formatTime(item.updatedAt),
+    // A few legacy conversations cannot report a count up front; the
+    // import result carries the real number instead of a misleading 0.
+    typeof item.messageCount === "number" ? fmt(t("messages"), { n: item.messageCount }) : null
+  ].filter((part) => part !== null && part !== "");
+  return h2(
+    "div",
+    {
+      className: "ci-row" + (nested ? " child" : ""),
+      onClick: () => onToggle(rowKey),
+      role: "checkbox",
+      "aria-checked": checked,
+      tabIndex: 0,
+      onKeyDown: (event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          onToggle(rowKey);
+        }
+      }
+    },
+    h2(P2.Checkbox, { checked, onChange: () => onToggle(rowKey) }),
+    h2(
+      "div",
+      { className: "ci-row-main" },
+      h2("div", { className: "ci-row-title", title: item.title }, item.title),
+      h2("div", { className: "ci-row-sub", title: item.cwd ?? void 0 }, meta.join(", "))
+    ),
+    h2(
+      "div",
+      { className: "ci-badges" },
+      item.isArchived ? h2(Badge, { tone: "warn" }, t("archived")) : null,
+      item.importedSessionId ? h2(Badge, { tone: "ok" }, t("imported")) : null
+    )
+  );
+}
+function ProgressBar(props) {
+  const total = props.total > 0 ? props.total : 0;
+  const done = Math.max(0, Math.min(props.done, total));
+  const percent = total === 0 ? props.finished ? 100 : 0 : Math.round(done / total * 100);
+  const indeterminate = !props.finished && done === 0 && total > 0;
+  return h2(
+    "div",
+    { className: "ci-progress-wrap" },
+    h2("div", { className: "ci-progress" }, h2("div", { className: "ci-progress-inner" + (indeterminate ? " indeterminate" : ""), style: indeterminate ? void 0 : { width: `${percent}%` } })),
+    h2(
+      "div",
+      { className: "ci-progress-line" },
+      h2("span", null, props.label),
+      h2("span", null, fmt(props.t("progress"), { done, total }))
+    )
+  );
+}
+function ImportModal(props) {
+  const { t, open, status, cancelling, onClose, onCancel, onRetryFailed, labels } = props;
+  if (!open) return null;
+  const running = status === null || status.state === "running";
+  const results = status?.results ?? [];
+  const okCount = results.filter((row) => row.ok === true && row.skipped !== true).length;
+  const skipCount = results.filter((row) => row.skipped === true).length;
+  const failCount = results.filter((row) => row.ok !== true && row.skipped !== true).length;
+  const finished = status !== null && status.state !== "running";
+  const summary = finished ? fmt(t("doneSummary"), { ok: okCount, fail: failCount, skip: skipCount }) : null;
+  const resultsList = results.length === 0 ? null : h2(
+    "div",
+    { className: "ci-results" },
+    results.map(
+      (row) => h2(
+        "div",
+        { className: "ci-result", key: `${row.source ?? "cursor"}:${row.id}` },
+        h2("span", { className: "ci-result-mark" }, row.skipped === true ? "\u2013" : row.ok === true ? "\u2713" : "\u2717"),
+        h2(
+          "span",
+          { className: "ci-result-text" },
+          h2("b", null, row.title),
+          row.source ? " [" + (labels?.[row.source] ?? row.source) + "]" : "",
+          row.skipped === true ? " \u2014 " + t("resultSkip") : row.ok === true ? " \u2014 " + resultDetail(row, t) + workspaceSuffix(row, t) : " \u2014 " + (row.error ?? t("resultFail")),
+          Array.isArray(row.warnings) && row.warnings.length > 0 ? h2("div", { className: "ci-hint", style: { marginTop: 2 } }, row.warnings.join("\uFF1B")) : null
+        )
+      )
+    )
+  );
+  let body;
+  if (status === null) {
+    body = h2("div", { className: "ci-progress-wrap" }, h2("div", { className: "ci-current" }, t("preparing")));
+  } else if (running) {
+    body = h2(
+      "div",
+      null,
+      h2(ProgressBar, { total: status.total, done: status.completed, label: status.current === null ? t("importing") : status.current.title, finished: false, t }),
+      status.current === null ? null : h2("div", { className: "ci-current", style: { marginTop: 8 } }, status.current.title),
+      resultsList
+    );
+  } else {
+    body = h2(
+      "div",
+      null,
+      h2("div", { className: "ci-current" }, status.state === "cancelled" ? t("jobCancelled") : summary),
+      status.state === "failed" && status.error ? h2("div", { className: "ci-error", style: { marginTop: 10 } }, status.error) : null,
+      resultsList,
+      finished ? h2("div", { className: "ci-hint", style: { marginTop: 10 } }, t("afterHint")) : null
+    );
+  }
+  const footer = running ? h2(P2.Button, { variant: "outline", onClick: cancelling ? void 0 : onCancel, disabled: cancelling === true }, cancelling ? t("cancelling") : t("cancel")) : h2(
+    react2.Fragment,
+    null,
+    failCount > 0 ? h2(P2.Button, { variant: "outline", onClick: onRetryFailed, style: { marginRight: 8 } }, t("retryFailed")) : null,
+    h2(P2.Button, { variant: "primary", onClick: onClose }, t("close"))
+  );
+  return h2(P2.Modal, {
+    open: true,
+    onClose: () => {
+      if (!running) onClose();
+    },
+    title: finished ? t("importDoneTitle") : t("importTitle"),
+    closeLabel: t("close"),
+    footer
+  }, body);
+}
+
+// src/client/export-panel.js
+var react3 = __toESM(require("react"), 1);
+var P3 = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
+var h3 = react3.createElement;
+var callExport = (endpoint, payload) => rpcCall(endpoint, payload, EXPORT_ROUTE_PREFIX);
+var PLAN_DEBOUNCE_MS = 220;
+function TargetCard(props) {
+  const { target, selected, onSelect, t } = props;
+  const disabled = target.available !== true;
+  return h3(
+    "div",
+    {
+      className: "ci-row" + (selected ? " selected" : "") + (disabled ? " disabled" : ""),
+      role: "radio",
+      "aria-checked": selected,
+      "aria-disabled": disabled,
+      tabIndex: disabled ? -1 : 0,
+      title: target.location ?? target.error ?? void 0,
+      onClick: () => {
+        if (!disabled) onSelect(target.id);
+      },
+      onKeyDown: (event) => {
+        if (disabled) return;
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          onSelect(target.id);
+        }
+      }
+    },
+    h3(P3.Radio === void 0 ? "input" : P3.Radio, {
+      type: P3.Radio === void 0 ? "radio" : void 0,
+      checked: selected,
+      disabled,
+      onChange: () => {
+        if (!disabled) onSelect(target.id);
+      }
+    }),
+    h3(
+      "div",
+      { className: "ci-row-main" },
+      h3(
+        "div",
+        { className: "ci-row-title" },
+        SOURCE_ICONS[target.id] !== void 0 ? h3("img", { className: "ci-target-icon", src: SOURCE_ICONS[target.id], alt: "" }) : null,
+        target.label
+      ),
+      h3(
+        "div",
+        { className: "ci-row-sub" },
+        disabled ? target.error ?? t("exportUnavailable") : target.description ?? ""
+      )
+    ),
+    h3(
+      "div",
+      { className: "ci-badges" },
+      disabled ? h3(Badge, { tone: "warn" }, t("exportUnavailable")) : null
+    )
+  );
+}
+function SourceRow(props) {
+  const { item, selected, onSelect, t } = props;
+  const meta = [item.cwdLabel || item.cwd || t("unknownProject"), formatTime(item.updatedAt)].filter(
+    (part) => typeof part === "string" && part !== ""
+  );
+  return h3(
+    "div",
+    {
+      className: "ci-row" + (selected ? " selected" : ""),
+      role: "radio",
+      "aria-checked": selected,
+      tabIndex: 0,
+      onClick: () => onSelect(item.id),
+      onKeyDown: (event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          onSelect(item.id);
+        }
+      }
+    },
+    h3(P3.Radio === void 0 ? "input" : P3.Radio, {
+      type: P3.Radio === void 0 ? "radio" : void 0,
+      checked: selected,
+      onChange: () => onSelect(item.id)
+    }),
+    h3(
+      "div",
+      { className: "ci-row-main" },
+      h3("div", { className: "ci-row-title", title: item.title }, item.title),
+      h3("div", { className: "ci-row-sub" }, meta.join(", "))
+    ),
+    h3(
+      "div",
+      { className: "ci-badges" },
+      typeof item.messageCount === "number" ? h3(Badge, null, fmt(t("messages"), { n: item.messageCount })) : null
+    )
+  );
+}
+function PlanCard(props) {
+  const { t, plan, written } = props;
+  if (plan.phase === "idle") return null;
+  if (plan.phase === "loading" && plan.data === null) {
+    return h3("div", { className: "ci-plan" }, h3("div", { className: "ci-plan-line muted" }, t("exportChecking")));
+  }
+  if (plan.phase === "error") {
+    return h3("div", { className: "ci-plan bad" }, h3("div", { className: "ci-plan-line" }, fmt(t("exportCheckFail"), { message: plan.error })));
+  }
+  const data = plan.data ?? {};
+  const exists = data.exists === true;
+  return h3(
+    "div",
+    { className: "ci-plan" + (written ? " done" : "") },
+    h3(
+      "div",
+      { className: "ci-plan-head" },
+      h3("strong", null, written ? t("exportDoneTitle") : t("exportPlanTitle")),
+      h3(
+        Badge,
+        { tone: exists ? "warn" : "ok" },
+        written ? exists ? t("exportUpdated") : t("exportCreated") : exists ? t("exportWillUpdate") : t("exportWillCreate")
+      ),
+      plan.phase === "loading" && !written ? h3("span", { className: "ci-plan-busy" }, t("exportChecking")) : null
+    ),
+    data.source?.title !== void 0 ? h3("div", { className: "ci-plan-line strong" }, data.source.title) : null,
+    typeof data.rows === "number" ? h3("div", { className: "ci-plan-line" }, fmt(t("exportSummary"), { rows: data.rows, messages: data.messages ?? 0 })) : null,
+    data.target !== void 0 ? h3("div", { className: "ci-plan-line muted path" }, data.target) : null,
+    // Upsert needs no switch: the id is derived from the source session, so
+    // "exists" already means "this is the same conversation". Say what will
+    // happen and mention the backup, instead of asking for permission.
+    exists && !written ? h3("div", { className: "ci-plan-line muted" }, t("exportUpdateNote")) : null,
+    written ? h3(
+      "div",
+      { className: "ci-plan-line muted" },
+      data.backupPath === void 0 || data.backupPath === null ? t("exportNoBackup") : fmt(t("exportBackup"), { path: data.backupPath })
+    ) : null,
+    Array.isArray(data.notes) && data.notes.length > 0 ? h3("ul", { className: "ci-plan-notes" }, data.notes.map((note, index) => h3("li", { key: index }, note))) : null
+  );
+}
+function sameIds(a, b) {
+  if (a.length !== b.length) return false;
+  const seen = new Set(a);
+  return b.every((id) => seen.has(id));
+}
+function readScope(feed) {
+  if (feed === void 0 || feed === null || typeof feed.read !== "function") return { available: false, ids: [] };
+  try {
+    const value = feed.read();
+    if (value === null || typeof value !== "object") return { available: false, ids: [] };
+    return { available: value.available === true, ids: Array.isArray(value.ids) ? value.ids : [] };
+  } catch {
+    return { available: false, ids: [] };
+  }
+}
+function messageOf(failure) {
+  return failure instanceof Error ? failure.message : String(failure);
+}
+function ExportPanel(props) {
+  const { t } = props;
+  const [scope, setScope] = react3.useState(() => readScope(props.pageSessions));
+  const [sources, setSources] = react3.useState({ phase: "loading", data: null, error: null, meta: null });
+  const [targets, setTargets] = react3.useState({ phase: "loading", data: null, error: null });
+  const [sourceId, setSourceId] = react3.useState("");
+  const [targetId, setTargetId] = react3.useState("");
+  const [mode, setMode] = react3.useState("full");
+  const [search, setSearch] = react3.useState("");
+  const [plan, setPlan] = react3.useState({ phase: "idle", key: "", data: null, error: "" });
+  const [written, setWritten] = react3.useState(false);
+  const [busy, setBusy] = react3.useState(false);
+  const [error, setError] = react3.useState("");
+  const planSeq = react3.useRef(0);
+  const loadSources = react3.useCallback(async (ids) => {
+    setSources((current) => ({ phase: "loading", data: current.data, error: null, meta: current.meta }));
+    try {
+      const value = await callExport("sources", ids === null ? {} : { ids });
+      const list = Array.isArray(value?.conversations) ? value.conversations : [];
+      setSources({
+        phase: "ready",
+        data: list,
+        error: null,
+        meta: {
+          pageOnly: value?.pageOnly === true,
+          total: typeof value?.total === "number" ? value.total : list.length,
+          hidden: typeof value?.hidden === "number" ? value.hidden : 0
+        }
+      });
+      setSourceId((current) => current !== "" && list.some((row) => row.id === current) ? current : list[0]?.id ?? "");
+    } catch (failure) {
+      setSources({ phase: "error", data: null, error: messageOf(failure), meta: null });
+    }
+  }, []);
+  const loadTargets = react3.useCallback(async () => {
+    setTargets({ phase: "loading", data: null, error: null });
+    try {
+      const value = await callExport("targets");
+      const list = Array.isArray(value?.targets) ? value.targets : [];
+      setTargets({ phase: "ready", data: list, error: null });
+      const firstUsable = list.find((row) => row.available === true);
+      setTargetId((current) => {
+        if (current !== "" && list.some((row) => row.id === current && row.available === true)) return current;
+        return firstUsable?.id ?? "";
+      });
+    } catch (failure) {
+      setTargets({ phase: "error", data: null, error: messageOf(failure) });
+    }
+  }, []);
+  react3.useEffect(() => {
+    void loadTargets();
+  }, [loadTargets]);
+  react3.useEffect(() => {
+    const feed = props.pageSessions;
+    if (feed === void 0 || feed === null || typeof feed.subscribe !== "function") return void 0;
+    return feed.subscribe(() => {
+      const next = readScope(feed);
+      setScope(
+        (current) => current.available === next.available && sameIds(current.ids, next.ids) ? current : next
+      );
+    });
+  }, [props.pageSessions]);
+  const scopeKey = scope.available ? `page:${scope.ids.length}:${[...scope.ids].sort().join(",")}` : "all";
+  react3.useEffect(() => {
+    void loadSources(scope.available ? scope.ids : null);
+  }, [scopeKey, loadSources]);
+  const planKey = `${sourceId}\0${targetId}\0${mode}`;
+  react3.useEffect(() => {
+    setError("");
+    if (sourceId === "" || targetId === "") {
+      planSeq.current += 1;
+      setPlan({ phase: "idle", key: "", data: null, error: "" });
+      setWritten(false);
+      return void 0;
+    }
+    const seq = ++planSeq.current;
+    setPlan((current) => ({
+      phase: "loading",
+      key: planKey,
+      data: current.key === planKey ? current.data : null,
+      error: ""
+    }));
+    setWritten(false);
+    const timer = setTimeout(async () => {
+      try {
+        const value = await callExport("export", {
+          sourceId,
+          targetId,
+          mode,
+          overwrite: true,
+          confirm: false
+        });
+        if (seq !== planSeq.current) return;
+        setPlan({ phase: "ready", key: planKey, data: value ?? null, error: "" });
+      } catch (failure) {
+        if (seq !== planSeq.current) return;
+        setPlan({ phase: "error", key: planKey, data: null, error: messageOf(failure) });
+      }
+    }, PLAN_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [planKey, sourceId, targetId, mode]);
+  const sourceList = Array.isArray(sources.data) ? sources.data : [];
+  const needle = search.trim().toLowerCase();
+  const visibleSources = needle === "" ? sourceList : sourceList.filter(
+    (row) => String(row.title ?? "").toLowerCase().includes(needle) || String(row.cwd ?? "").toLowerCase().includes(needle)
+  );
+  const targetList = Array.isArray(targets.data) ? targets.data : [];
+  const currentTarget = targetList.find((row) => row.id === targetId);
+  const targetLabel = currentTarget?.label ?? targetId;
+  const planCurrent = plan.phase === "ready" && plan.key === planKey && plan.data !== null;
+  const canWrite = sourceId !== "" && targetId !== "" && planCurrent && !busy;
+  const run = async () => {
+    if (canWrite !== true) return;
+    setBusy(true);
+    setError("");
+    try {
+      const value = await callExport("export", { sourceId, targetId, mode, overwrite: true, confirm: true });
+      setPlan({ phase: "ready", key: planKey, data: value ?? null, error: "" });
+      setWritten(true);
+      if (typeof props.loadList === "function") props.loadList(true);
+    } catch (failure) {
+      setError(fmt(t("exportFailed"), { message: messageOf(failure) }));
+      setWritten(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const modeControl = primitivesAvailable.SegmentedTabs ? h3(P3.SegmentedTabs, {
+    value: mode,
+    onChange: (next) => setMode(next),
+    label: t("exportModeLabel"),
+    items: [
+      { value: "full", label: t("exportModeFull"), id: "session-export-mode-full" },
+      { value: "flat", label: t("exportModeFlat"), id: "session-export-mode-flat" }
+    ]
+  }) : h3(
+    react3.Fragment,
+    null,
+    ["full", "flat"].map(
+      (value) => h3(
+        "button",
+        {
+          key: value,
+          type: "button",
+          title: value === "full" ? t("exportModeFullHint") : t("exportModeFlatHint"),
+          className: "ci-mode" + (mode === value ? " active" : ""),
+          onClick: () => setMode(value)
+        },
+        value === "full" ? t("exportModeFull") : t("exportModeFlat")
+      )
+    )
+  );
+  const loadingSources = sources.phase === "loading";
+  const loadingTargets = targets.phase === "loading";
+  const noTargets = targets.phase === "ready" && targetList.filter((row) => row.available === true).length === 0;
+  const scopeNote = sources.meta === null ? null : h3(
+    "div",
+    { className: "ci-scope-note" },
+    sources.meta.pageOnly === true ? fmt(t("exportPageOnly"), { shown: sourceList.length, total: sources.meta.total }) : fmt(t("exportPageAll"), { total: sources.meta.total })
+  );
+  let actionHint = null;
+  if (sourceId === "") actionHint = t("exportNoSource");
+  else if (targetId === "") actionHint = noTargets ? t("exportNoTarget") : null;
+  else if (plan.phase === "loading") actionHint = t("exportChecking");
+  else if (plan.phase === "error") actionHint = t("exportCheckHint");
+  return h3(
+    "div",
+    { className: "ci-export" },
+    h3("div", { className: "ci-export-head" }, h3("p", { className: "ci-sub" }, t("exportSubtitle"))),
+    error !== "" ? h3("div", { className: "ci-error" }, error) : null,
+    h3(
+      "div",
+      { className: "ci-export-body" },
+      h3(
+        "div",
+        { className: "ci-export-grid" },
+        // ── source column ────────────────────────────────────────────────────
+        h3(
+          "div",
+          { className: "ci-export-col" },
+          h3("div", { className: "ci-col-head" }, t("exportSource")),
+          h3(P3.Input === void 0 ? "input" : P3.Input, {
+            className: "ci-search",
+            placeholder: t("searchPlaceholder"),
+            value: search,
+            onChange: (event) => setSearch(event.target.value)
+          }),
+          scopeNote,
+          // Show the hint only before the first page of rows arrives; a reload
+          // keeps the previous rows visible instead of blinking the column out.
+          loadingSources && sources.data === null ? h3("div", { className: "ci-loading-hint" }, t("scanningSources")) : sources.phase === "error" ? h3("div", { className: "ci-error" }, fmt(t("exportSourceLoadFail"), { message: String(sources.error) })) : visibleSources.length === 0 ? h3(
+            "div",
+            { className: "ci-empty" },
+            sources.meta !== null && sources.meta.pageOnly === true && sourceList.length === 0 ? t("exportPageEmpty") : t("noMatch")
+          ) : h3(
+            "div",
+            { className: "ci-list", role: "radiogroup" },
+            visibleSources.map((item) => h3(SourceRow, { key: item.id, item, selected: item.id === sourceId, onSelect: setSourceId, t }))
+          )
+        ),
+        // ── target column ────────────────────────────────────────────────────
+        h3(
+          "div",
+          { className: "ci-export-col" },
+          h3("div", { className: "ci-col-head" }, t("exportTarget")),
+          loadingTargets ? h3("div", { className: "ci-loading-hint" }, t("scanningSources")) : targets.phase === "error" ? h3("div", { className: "ci-error" }, fmt(t("exportTargetsFail"), { message: String(targets.error) })) : noTargets ? h3("div", { className: "ci-empty" }, t("exportNoTarget")) : h3(
+            "div",
+            { className: "ci-list", role: "radiogroup" },
+            targetList.map((item) => h3(TargetCard, { key: item.id, target: item, selected: item.id === targetId, onSelect: setTargetId, t }))
+          ),
+          h3("div", { className: "ci-export-options" }, modeControl)
+        )
+      ),
+      // The plan sits under both columns: it describes the *pair*, not either side.
+      h3(PlanCard, { t, plan, written })
+    ),
+    h3(
+      "div",
+      { className: "ci-export-actions" },
+      actionHint === null ? null : h3("span", { className: "ci-hint" }, actionHint),
+      h3("span", { className: "ci-group-spacer" }),
+      // The host's own button, so this page and the import page share one look.
+      // The raw `<button>` is the forward-compatibility fallback.
+      primitivesAvailable.Button ? h3(
+        P3.Button,
+        { variant: "primary", disabled: canWrite !== true, onClick: () => void run() },
+        busy ? t("exportRunning") : fmt(t("exportRunTo"), { target: targetLabel })
+      ) : h3(
+        "button",
+        {
+          type: "button",
+          className: "ci-btn primary",
+          disabled: canWrite !== true,
+          onClick: () => void run()
+        },
+        busy ? t("exportRunning") : fmt(t("exportRunTo"), { target: targetLabel })
+      )
+    )
+  );
+}
+
+// src/client/panel.js
+var h4 = react4.createElement;
+function SessionImportPanel(props) {
+  const { t, rpc, refreshSessions } = props;
+  const [list, setList] = react4.useState({ phase: "loading", data: null, error: null });
+  const [tab, setTab] = react4.useState("import");
+  const [selected, setSelected] = react4.useState(() => /* @__PURE__ */ new Set());
+  const [activeSource, setActiveSource] = react4.useState(() => {
+    try {
+      const stored = globalThis.localStorage?.getItem("session-import:source");
+      return typeof stored === "string" && stored !== "" ? stored : null;
+    } catch {
+      return null;
+    }
+  });
+  const [query, setQuery] = react4.useState("");
+  const [scope, setScopeInner] = react4.useState(() => {
+    try {
+      const stored = globalThis.localStorage?.getItem("session-import:scope");
+      return stored === "all" || stored === "unimported" ? stored : "unimported";
+    } catch {
+      return "unimported";
+    }
+  });
+  const setScope = react4.useCallback((next) => {
+    setScopeInner(next);
+    try {
+      globalThis.localStorage?.setItem("session-import:scope", next);
+    } catch {
+    }
+  }, []);
+  const [expandedGroups, setExpandedGroups] = react4.useState(() => /* @__PURE__ */ new Set());
+  const [importMode, setImportModeInner] = react4.useState(() => {
+    try {
+      const stored = globalThis.localStorage?.getItem("session-import:mode");
+      return stored === "compatible" || stored === "full" ? stored : "full";
+    } catch {
+      return "full";
+    }
+  });
+  const setImportMode = react4.useCallback((mode) => {
+    setImportModeInner(mode);
+    try {
+      globalThis.localStorage?.setItem("session-import:mode", mode);
+    } catch {
+    }
+  }, []);
+  const [job, setJob] = react4.useState(null);
+  const [modalOpen, setModalOpen] = react4.useState(false);
+  const [cancelling, setCancelling] = react4.useState(false);
+  const [notice, setNotice] = react4.useState(null);
+  const aliveRef = react4.useRef(true);
+  react4.useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+  const loadList = react4.useCallback(async (refresh) => {
+    setList((prev) => ({ ...prev, phase: prev.data === null ? "loading" : "refreshing", error: null }));
+    try {
+      const data = await rpc("list", { refresh: refresh === true });
+      if (!aliveRef.current) return;
+      setList({ phase: "ready", data, error: null });
+    } catch (error) {
+      if (!aliveRef.current) return;
+      setList({ phase: "error", data: null, error: error instanceof Error ? error.message : String(error) });
+    }
+  }, [rpc]);
+  react4.useEffect(() => {
+    loadList(false);
+  }, [loadList]);
+  react4.useEffect(() => {
+    if (list.phase !== "ready" || list.data === null) return;
+    const available = (Array.isArray(list.data.sources) ? list.data.sources : []).filter((source) => source.available !== false);
+    if (available.length === 0) return;
+    setActiveSource((prev) => prev !== null && available.some((source) => source.id === prev) ? prev : available[0].id);
+  }, [list.phase, list.data]);
+  react4.useEffect(() => {
+    if (job === null || job.jobId === void 0) return void 0;
+    let cancelled = false;
+    let timer;
+    const tick = async () => {
+      try {
+        const status = await rpc("status", { jobId: job.jobId });
+        if (cancelled) return;
+        setJob({ jobId: job.jobId, status });
+        if (status.state !== "running") {
+          clearInterval(timer);
+          setCancelling(false);
+          loadList(false);
+          if (typeof refreshSessions === "function") refreshSessions(status.results);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        clearInterval(timer);
+        setNotice(error instanceof Error ? error.message : String(error));
+      }
+    };
+    timer = setInterval(tick, 300);
+    tick();
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [job === null ? null : job.jobId, rpc, loadList, refreshSessions]);
+  const sources = Array.isArray(list.data?.sources) ? list.data.sources : [];
+  const totalCount = sources.reduce((sum, source) => sum + (source.count ?? (source.conversations ?? []).length), 0);
+  const currentSource = activeSource === null ? void 0 : sources.find((source) => source.id === activeSource);
+  const conversations = react4.useMemo(() => {
+    if (currentSource === void 0) return [];
+    const rows = (currentSource.conversations ?? []).map((conversation) => ({
+      ...conversation,
+      key: typeof conversation.key === "string" ? conversation.key : `${currentSource.id}:${conversation.id}`,
+      sourceLabel: currentSource.label ?? currentSource.id
+    }));
+    rows.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0));
+    return rows;
+  }, [currentSource]);
+  const filtered = react4.useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return conversations.filter((item) => {
+      if (scope === "unimported" && item.importedSessionId) return false;
+      if (needle === "") return true;
+      return String(item.title).toLowerCase().includes(needle) || String(item.cwdLabel ?? "").toLowerCase().includes(needle) || String(item.cwd ?? "").toLowerCase().includes(needle);
+    });
+  }, [conversations, query, scope]);
+  const searching = query.trim() !== "";
+  const groups = react4.useMemo(() => {
+    const map = /* @__PURE__ */ new Map();
+    for (const item of filtered) {
+      const groupKey = typeof item.cwd === "string" && item.cwd !== "" ? item.cwd : "__unknown__";
+      let group = map.get(groupKey);
+      if (group === void 0) {
+        group = {
+          key: groupKey,
+          cwd: typeof item.cwd === "string" && item.cwd !== "" ? item.cwd : null,
+          label: item.cwdLabel || t("unknownProject"),
+          items: [],
+          latest: 0,
+          imported: 0
+        };
+        map.set(groupKey, group);
+      }
+      group.items.push(item);
+      group.latest = Math.max(group.latest, item.updatedAt ?? 0);
+      if (item.importedSessionId) group.imported += 1;
+    }
+    const list2 = Array.from(map.values());
+    for (const group of list2) group.items.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0));
+    list2.sort((left, right) => right.latest - left.latest);
+    return list2;
+  }, [filtered, t]);
+  const isGroupOpen = (key) => searching || expandedGroups.has(key);
+  const toggleGroup = react4.useCallback((key) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+  const expandAllGroups = react4.useCallback(() => {
+    setExpandedGroups(new Set(groups.map((group) => group.key)));
+  }, [groups]);
+  const collapseAllGroups = react4.useCallback(() => {
+    setExpandedGroups(/* @__PURE__ */ new Set());
+  }, []);
+  const groupUnimported = (group) => group.items.filter((item) => !item.importedSessionId);
+  const groupAllSelected = (group) => {
+    const rows = groupUnimported(group);
+    return rows.length > 0 && rows.every((item) => selected.has(item.key));
+  };
+  const toggleGroupSelection = (group) => {
+    const rows = groupUnimported(group);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const all = rows.length > 0 && rows.every((item) => next.has(item.key));
+      for (const item of rows) {
+        if (all) next.delete(item.key);
+        else next.add(item.key);
+      }
+      return next;
+    });
+  };
+  const toggle = react4.useCallback((key) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+  const selectUnimported = react4.useCallback(() => {
+    setSelected(() => new Set(filtered.filter((item) => !item.importedSessionId).map((item) => item.key)));
+  }, [filtered]);
+  const startImport = react4.useCallback(async (keys) => {
+    if (keys.length === 0) return;
+    const items = keys.map((key) => {
+      const marker = key.indexOf(":");
+      return marker < 0 ? { source: "cursor", id: key } : { source: key.slice(0, marker), id: key.slice(marker + 1) };
+    });
+    setNotice(null);
+    try {
+      const started = await rpc("import", { items, options: { mode: importMode } });
+      setModalOpen(true);
+      setCancelling(false);
+      setJob({ jobId: started.jobId, status: null });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    }
+  }, [rpc, importMode]);
+  const cancelImport = react4.useCallback(async () => {
+    if (job === null || job.jobId === void 0) return;
+    setCancelling(true);
+    try {
+      await rpc("cancel", { jobId: job.jobId });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+      setCancelling(false);
+    }
+  }, [rpc, job]);
+  const closeModal = react4.useCallback(() => {
+    setModalOpen(false);
+    setJob(null);
+  }, []);
+  const retryFailed = react4.useCallback(() => {
+    const status = job?.status;
+    const failed = (status?.results ?? []).filter((row) => row.ok !== true && row.skipped !== true).map((row) => `${row.source ?? "cursor"}:${row.id}`);
+    setModalOpen(false);
+    setJob(null);
+    if (failed.length > 0) startImport(failed);
+  }, [job, startImport]);
+  const selectedList = Array.from(selected);
+  const unimportedCount = conversations.filter((item) => !item.importedSessionId).length;
+  const importedTotal = conversations.filter((item) => item.importedSessionId).length;
+  const selectedProjects = groups.filter((group) => group.items.some((item) => selected.has(item.key))).length;
+  const unimportedTotal = sources.reduce(
+    (sum, source) => sum + (source.conversations ?? []).filter((row) => !row.importedSessionId).length,
+    0
+  );
+  let railBody;
+  if (list.phase === "loading" && list.data === null) {
+    railBody = h4("div", { className: "ci-empty" }, t("scanning"));
+  } else if (list.phase === "error" && list.data === null) {
+    railBody = h4("div", { className: "ci-error" }, fmt(t("unavailable"), { message: list.error ?? "scan failed" }));
+  } else {
+    railBody = sources.map((source) => {
+      const available = source.available !== false;
+      const count = source.count ?? (source.conversations ?? []).length;
+      const imported = (source.conversations ?? []).filter((conversation) => conversation.importedSessionId).length;
+      const active = source.id === activeSource;
+      const meta = available ? imported > 0 ? fmt(t("listSummary"), { total: count, imported }) : fmt(t("sourceConversations"), { n: count }) : source.error ?? t("sourceUnavailable");
+      return h4(
+        "button",
+        {
+          key: source.id,
+          type: "button",
+          className: "ci-rail-row" + (active ? " active" : "") + (available ? "" : " unavailable"),
+          title: available ? source.description || source.label : source.error ?? t("sourceUnavailable"),
+          onClick: () => {
+            if (!available) return;
+            setActiveSource(source.id);
+            try {
+              globalThis.localStorage?.setItem("session-import:source", source.id);
+            } catch {
+            }
+            setQuery("");
+            setNotice(null);
+          }
+        },
+        h4(
+          "span",
+          { className: "ci-rail-row-icon" },
+          SOURCE_ICONS[source.id] !== void 0 ? h4("img", { className: "ci-source-icon-img", src: SOURCE_ICONS[source.id], alt: "", draggable: false }) : null
+        ),
+        h4(
+          "span",
+          { className: "ci-rail-row-main" },
+          h4("span", { className: "ci-rail-row-name" }, source.label ?? source.id),
+          h4("span", { className: "ci-rail-row-meta" }, meta)
+        )
+      );
+    });
+  }
+  const folderIcon = h4(
+    "svg",
+    { className: "ci-folder", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true" },
+    h4("path", { d: "M2 4.2c0-.5.4-.9.9-.9h3l1.2 1.4h5.8c.5 0 .9.4.9.9v6.2c0 .5-.4.9-.9.9H2.9a.9.9 0 0 1-.9-.9V4.2Z", stroke: "currentColor", strokeWidth: 1.2, strokeLinejoin: "round" })
+  );
+  let listBody;
+  if (currentSource === void 0) {
+    listBody = h4("div", { className: "ci-empty" }, t("pickSource"));
+  } else if (currentSource.available === false) {
+    listBody = h4(
+      "div",
+      { className: "ci-error" },
+      fmt(t("unavailable"), { message: currentSource.error ?? t("sourceUnavailable") }),
+      h4("div", { style: { marginTop: 10 } }, h4(P4.Button, { variant: "outline", onClick: () => loadList(true) }, t("retry")))
+    );
+  } else if (filtered.length === 0) {
+    const emptyText = query.trim() !== "" ? t("noMatch") : scope === "unimported" && conversations.length > 0 ? t("allImported") : t("sourceEmpty");
+    const showAll = scope === "unimported" && conversations.length > 0 && query.trim() === "";
+    listBody = h4(
+      "div",
+      { className: "ci-empty" },
+      emptyText,
+      showAll ? h4(
+        "div",
+        { className: "ci-empty-actions" },
+        h4(P4.Button, { variant: "outline", onClick: () => setScope("all") }, t("showAll"))
+      ) : null
+    );
+  } else {
+    listBody = h4(
+      "div",
+      { className: "ci-list", role: "list" },
+      groups.map((group) => {
+        const open = isGroupOpen(group.key);
+        return h4(
+          "div",
+          { className: "ci-group", role: "group", key: group.key },
+          h4(
+            "div",
+            { className: "ci-group-head", onClick: () => toggleGroup(group.key), title: group.cwd ?? void 0 },
+            IconChevronDown !== void 0 ? h4("span", { className: "ci-chevron" }, open ? h4(IconChevronDown, { size: 14 }) : h4(IconChevronRight ?? IconChevronDown, { size: 14 })) : h4("span", { className: "ci-chevron" }, open ? "\u25BE" : "\u25B8"),
+            folderIcon,
+            h4("span", { className: "ci-group-name" }, group.label),
+            h4("span", { className: "ci-group-meta" }, fmt(t("groupCount"), { n: group.items.length })),
+            group.imported > 0 ? h4("span", { className: "ci-group-meta" }, fmt(t("groupImported"), { n: group.imported })) : null,
+            h4("span", { className: "ci-group-spacer" }),
+            h4(
+              "span",
+              { className: "ci-group-check", onClick: (event) => event.stopPropagation() },
+              h4(P4.Checkbox, { checked: groupAllSelected(group), onChange: () => toggleGroupSelection(group) })
+            )
+          ),
+          open ? h4(
+            "div",
+            { className: "ci-group-body" },
+            group.items.map((item) => h4(ConversationRow, { key: item.key, item, checked: selected.has(item.key), onToggle: toggle, t, nested: true }))
+          ) : null
+        );
+      })
+    );
+  }
+  const modeButton = (mode, label, hint) => h4(
+    "button",
+    {
+      key: mode,
+      type: "button",
+      title: hint,
+      className: "ci-mode" + (importMode === mode ? " active" : ""),
+      onClick: () => setImportMode(mode)
+    },
+    label
+  );
+  const modeControl = primitivesAvailable.SegmentedTabs ? h4(P4.SegmentedTabs, {
+    value: importMode,
+    onChange: (next) => setImportMode(next),
+    label: t("modeLabel"),
+    items: [
+      { value: "full", label: t("modeFull"), id: "session-import-mode-full" },
+      { value: "compatible", label: t("modeCompatible"), id: "session-import-mode-compatible" }
+    ]
+  }) : h4(
+    react4.Fragment,
+    null,
+    modeButton("full", t("modeFull"), t("modeFullHint")),
+    modeButton("compatible", t("modeCompatible"), t("modeCompatibleHint"))
+  );
+  const scopeControl = primitivesAvailable.SegmentedTabs ? h4(P4.SegmentedTabs, {
+    value: scope,
+    onChange: (next) => setScope(next),
+    label: t("scopeLabel"),
+    items: [
+      { value: "unimported", label: t("scopeUnimported"), id: "session-import-scope-unimported" },
+      { value: "all", label: t("scopeAll"), id: "session-import-scope-all" }
+    ]
+  }) : null;
+  const sourceIcon = currentSource !== void 0 ? SOURCE_ICONS[currentSource.id] : void 0;
+  const initialLoading = list.phase === "loading" && list.data === null;
+  const loadingPane = h4(
+    "div",
+    { className: "ci-loading" },
+    h4(
+      "div",
+      { className: "ci-loading-card" },
+      h4("span", { className: "ci-spinner" }, P4.IconLoadingOutlineRegular !== void 0 ? h4(P4.IconLoadingOutlineRegular, { size: 18 }) : "\u25CC"),
+      h4("div", { className: "ci-loading-title" }, t("scanningSources")),
+      h4("div", { className: "ci-loading-hint" }, t("scanningHint")),
+      h4(
+        "div",
+        { className: "ci-skeleton-list" },
+        [0, 1, 2, 3, 4].map((index) => h4("div", { className: "ci-skel-line", key: index, style: { width: `${52 + index * 17 % 36}%` } }))
+      )
+    )
+  );
+  return h4(
+    "div",
+    { className: "ci-page" },
+    h4(
+      "div",
+      { className: "ci-head" },
+      h4("div", null, h4("h2", { className: "ci-title" }, t("title")), h4("p", { className: "ci-sub" }, t("subtitle"))),
+      h4(P4.Button, {
+        variant: "outline",
+        onClick: () => loadList(true),
+        disabled: list.phase === "loading" || list.phase === "refreshing",
+        ...list.data?.scannedAt ? { title: fmt(t("lastScan"), { time: formatTime(list.data.scannedAt) }) } : {}
+      }, list.phase === "loading" || list.phase === "refreshing" ? t("scanning") : t("refresh"))
+    ),
+    h4(
+      "div",
+      { className: "ci-tabs", role: "tablist" },
+      ["import", "export"].map(
+        (id) => h4(
+          "button",
+          {
+            key: id,
+            type: "button",
+            role: "tab",
+            "aria-selected": tab === id,
+            className: "ci-tab" + (tab === id ? " active" : ""),
+            onClick: () => setTab(id)
+          },
+          id === "import" ? t("tabImport") : t("tabExport"),
+          // The badge is the answer to "is there anything to do here?" —
+          // without it the two tabs look identical and the count only
+          // appears after opening one.
+          id === "import" && unimportedTotal > 0 ? h4("span", { className: "ci-tab-count" }, String(unimportedTotal)) : null
+        )
+      )
+    ),
+    tab === "export" ? h4(ExportPanel, { t, loadList, pageSessions: props.pageSessions }) : initialLoading ? loadingPane : h4(
+      "div",
+      { className: "ci-layout" },
+      h4(
+        "div",
+        { className: "ci-rail" },
+        h4("div", { className: "ci-rail-label" }, t("sourcesLabel")),
+        railBody
+      ),
+      h4(
+        "div",
+        { className: "ci-main" },
+        currentSource === void 0 ? null : h4(
+          "div",
+          { className: "ci-main-head" },
+          h4(
+            "span",
+            { className: "ci-main-head-icon" },
+            sourceIcon !== void 0 ? h4("img", { className: "ci-source-icon-img", src: sourceIcon, alt: "", draggable: false }) : null
+          ),
+          h4(
+            "div",
+            null,
+            h4("div", { className: "ci-main-head-title" }, currentSource.label ?? currentSource.id),
+            h4("div", { className: "ci-main-head-sub" }, fmt(t("listSummary"), { total: conversations.length, imported: importedTotal }))
+          )
+        ),
+        h4(
+          "div",
+          { className: "ci-toolbar" },
+          h4(P4.Input, {
+            className: "ci-grow",
+            icon: IconSearch !== void 0 ? h4(IconSearch, { size: 16 }) : void 0,
+            placeholder: t("searchPlaceholder"),
+            value: query,
+            onChange: (event) => setQuery(event.target.value),
+            "aria-label": t("searchPlaceholder")
+          }),
+          scopeControl,
+          h4(P4.Button, { variant: "ghost", onClick: selectUnimported, disabled: unimportedCount === 0 }, t("selectAll")),
+          h4(P4.Button, {
+            variant: "ghost",
+            title: t("expandAllHint"),
+            "aria-label": t("expandAllHint"),
+            onClick: expandAllGroups,
+            disabled: groups.length === 0,
+            icon: IconChevronDown !== void 0 ? h4(IconChevronDown, { size: 16 }) : void 0
+          }),
+          h4(P4.Button, {
+            variant: "ghost",
+            title: t("collapseAllHint"),
+            "aria-label": t("collapseAllHint"),
+            onClick: collapseAllGroups,
+            disabled: expandedGroups.size === 0,
+            icon: P4.IconChevronUpOutlineRegular !== void 0 ? h4(P4.IconChevronUpOutlineRegular, { size: 16 }) : void 0
+          })
+        ),
+        listBody,
+        notice === null ? null : h4("div", { className: "ci-error" }, notice),
+        h4(
+          "div",
+          { className: "ci-foot" },
+          h4(
+            "div",
+            { className: "ci-foot-actions" },
+            modeControl,
+            h4("span", { className: "ci-hint", title: t("modeInfo") }, P4.IconInfoOutlineRegular !== void 0 ? h4(P4.IconInfoOutlineRegular, { size: 16 }) : "\u24D8"),
+            h4("span", { className: "ci-group-spacer" }),
+            selected.size > 0 ? h4(P4.Button, { variant: "ghost", onClick: () => setSelected(/* @__PURE__ */ new Set()) }, t("clearSelection")) : null,
+            // "3 条（2 个项目）" beats "3 条": it tells the user whether the
+            // selection is one project's worth of work or four.
+            h4(
+              "span",
+              { className: "ci-meta" },
+              selected.size === 0 ? fmt(t("selected"), { n: 0 }) : fmt(t("selectedDetail"), { n: selected.size, g: selectedProjects })
+            ),
+            h4(
+              P4.Button,
+              { variant: "primary", disabled: selectedList.length === 0, onClick: () => startImport(selectedList) },
+              fmt(t("start"), { n: selectedList.length })
+            )
+          )
+        )
+      )
+    ),
+    h4(ImportModal, {
+      t,
+      open: modalOpen,
+      status: job?.status ?? null,
+      cancelling,
+      labels: Object.fromEntries(sources.map((source) => [source.id, source.label ?? source.id])),
+      onClose: closeModal,
+      onCancel: cancelImport,
+      onRetryFailed: retryFailed
+    })
+  );
+}
+
+// src/client/styles.js
+var CSS = [
+  ".ci-page{display:flex;flex-direction:column;height:100%;min-height:0;padding:24px 28px 18px;gap:14px;color:var(--dsw-alias-label-primary,#1f2329)}",
+  // `container-type` lets the page react to *its own* width instead of the
+  // window's: the same panel renders wide in the main area and narrow in the
+  // sidebar, and only the container knows which.
+  ".ci-layout{display:flex;gap:16px;flex:1;min-height:0;overflow:hidden;container-type:inline-size;container-name:importpage}",
+  // Narrow (sidebar): the source rail becomes a horizontal strip of chips so
+  // the conversation list keeps the full width instead of being squeezed
+  // into a column half its normal size.
+  "@container importpage (max-width:620px){",
+  " .ci-layout{flex-direction:column;overflow:auto}",
+  " .ci-rail{width:auto;flex-shrink:0;flex-direction:row;gap:6px;overflow-x:auto;overflow-y:hidden;padding-bottom:2px}",
+  " .ci-rail-label{display:none}",
+  " .ci-rail-row{width:auto;flex:0 0 auto;border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:999px;padding:4px 10px 4px 6px;gap:6px}",
+  " .ci-rail-row-meta{display:none}",
+  " .ci-main{min-height:0}",
+  "}",
+  ".ci-rail{width:224px;flex-shrink:0;display:flex;flex-direction:column;gap:2px;overflow:auto;padding:2px}",
+  ".ci-loading{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:24px 0}",
+  ".ci-loading-card{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:420px;width:100%}",
+  ".ci-spinner{display:inline-flex;color:var(--dsw-alias-label-tertiary,#8a919c)}",
+  ".ci-spinner svg{animation:ci-spin 1s linear infinite}",
+  "@keyframes ci-spin{to{transform:rotate(360deg)}}",
+  ".ci-loading-title{font-size:14px;line-height:20px;font-weight:600}",
+  ".ci-loading-hint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8a919c);text-align:center}",
+  ".ci-skeleton-list{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:10px}",
+  ".ci-skel-line{height:12px;border-radius:6px;background:var(--dsw-alias-bg-l3,#e9eaee);animation:ci-pulse 1.4s ease-in-out infinite}",
+  "@keyframes ci-pulse{0%,100%{opacity:.5}50%{opacity:1}}",
+  ".ci-rail-label{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8a919c);padding:0 8px 6px}",
+  ".ci-rail-row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font:inherit;cursor:pointer;border:0.5px solid transparent;border-radius:8px;padding:7px 8px;background:transparent;color:var(--dsw-alias-label-primary,#1f2329)}",
+  ".ci-rail-row:hover{background:var(--dsw-alias-bg-l2,rgba(0,0,0,.03))}",
+  ".ci-rail-row.active{background:var(--dsw-alias-bg-l3,#e9eaee)}",
+  ".ci-rail-row.unavailable{opacity:.55;cursor:not-allowed}",
+  ".ci-rail-row-icon{width:24px;height:24px;flex-shrink:0;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-l3,#e9eaee)}",
+  ".ci-rail-row-main{display:flex;flex-direction:column;flex:1;min-width:0}",
+  ".ci-rail-row-name{font-size:13px;line-height:18px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".ci-rail-row-meta{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8a919c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".ci-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}",
+  ".ci-main-head{display:flex;align-items:center;gap:10px;min-height:34px}",
+  ".ci-main-head-icon{width:28px;height:28px;flex-shrink:0;border-radius:7px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-l3,#e9eaee)}",
+  ".ci-main-head-title{font-size:15px;line-height:20px;font-weight:600}",
+  ".ci-main-head-sub{font-size:12px;line-height:17px;color:var(--dsw-alias-label-tertiary,#8a919c)}",
+  ".ci-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}",
+  ".ci-title{margin:0;font-size:18px;line-height:26px;font-weight:600}",
+  ".ci-sub{margin:4px 0 0;font-size:13px;line-height:20px;color:var(--dsw-alias-label-tertiary,#8a919c)}",
+  ".ci-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}",
+  ".ci-source-icon-img{width:28px;height:28px;display:block;object-fit:cover}",
+  ".ci-foot-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}",
+  ".ci-mode{font:inherit;font-size:12px;line-height:18px;cursor:pointer;background:transparent;color:var(--dsw-alias-label-secondary,#5c626b);border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:8px;padding:2px 9px}",
+  ".ci-mode.active{color:var(--dsw-alias-label-primary,#1f2329);border-color:currentColor;background:var(--dsw-alias-bg-l2,rgba(0,0,0,.04))}",
+  ".ci-grow{flex:1;min-width:160px}",
+  ".ci-meta{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8a919c);white-space:nowrap}",
+  ".ci-list{flex:1;min-height:0;overflow:auto;border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:10px}",
+  ".ci-group{border-bottom:0.5px solid var(--dsw-alias-border-l2,#e5e6eb)}",
+  ".ci-group:last-child{border-bottom:none}",
+  ".ci-group-head{display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;background:var(--dsw-alias-bg-l2,rgba(0,0,0,.02))}",
+  ".ci-group-head:hover{background:var(--dsw-alias-bg-l3,rgba(0,0,0,.05))}",
+  ".ci-chevron{width:14px;flex-shrink:0;color:var(--dsw-alias-label-tertiary,#8a919c);font-size:11px;line-height:1}",
+  ".ci-folder{flex-shrink:0;width:16px;height:16px;color:var(--dsw-alias-label-secondary,#5c626b)}",
+  ".ci-group-name{font-size:13px;line-height:20px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".ci-group-meta{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8a919c);white-space:nowrap}",
+  ".ci-group-spacer{flex:1}",
+  ".ci-group-check{display:flex;align-items:center;padding-left:4px;flex-shrink:0}",
+  ".ci-row.child{padding-left:36px}",
+  ".ci-row{display:flex;align-items:flex-start;gap:12px;padding:11px 14px;border-bottom:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);cursor:pointer}",
+  ".ci-row:last-child{border-bottom:none}",
+  ".ci-row:hover{background:var(--dsw-alias-bg-l2,rgba(0,0,0,.03))}",
+  ".ci-row-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}",
+  ".ci-row-title{font-size:14px;line-height:20px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".ci-target-icon{width:20px;height:20px;flex-shrink:0;border-radius:5px;margin-right:7px;vertical-align:-4px;background:var(--dsw-alias-bg-l3,#e9eaee);object-fit:cover;display:inline-block}",
+  ".ci-row-sub{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8a919c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".ci-badges{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:40%}",
+  ".ci-badge{font-size:11px;line-height:16px;padding:1px 7px;border-radius:9px;border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);color:var(--dsw-alias-label-secondary,#5c626b);white-space:nowrap}",
+  ".ci-badge.ok{color:var(--dsw-alias-state-success-primary,#1f9d55);border-color:currentColor}",
+  ".ci-badge.warn{color:var(--dsw-alias-state-warning-primary,#c98a00);border-color:currentColor}",
+  // The action bar stays put: same treatment as the export page, so the
+  // primary button is always where the eye expects it.
+  ".ci-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0;padding-top:10px;border-top:0.5px solid var(--dsw-alias-border-l2,#e5e6eb)}",
+  ".ci-empty{padding:40px 16px;text-align:center;font-size:13px;line-height:20px;color:var(--dsw-alias-label-tertiary,#8a919c)}",
+  ".ci-error{padding:14px 16px;border-radius:10px;border:0.5px solid var(--dsw-alias-state-error-primary,#d93026);background:rgba(217,48,38,.06);font-size:13px;line-height:20px}",
+  ".ci-progress-wrap{display:flex;flex-direction:column;gap:8px;width:100%;min-width:0;box-sizing:border-box}",
+  ".ci-progress{height:6px;flex-shrink:0;border-radius:3px;background:var(--dsw-alias-bg-l3,#e9eaee);overflow:hidden}",
+  ".ci-progress-inner{height:100%;border-radius:3px;background:var(--dsw-alias-state-business-primary,#4d6bfe);transition:width .25s ease}",
+  ".ci-progress-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;min-width:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8a919c)}",
+  ".ci-progress-line>span{min-width:0;overflow-wrap:anywhere}",
+  ".ci-progress-line>span:last-child{white-space:nowrap;flex-shrink:0}",
+  ".ci-progress-inner.indeterminate{width:30%;animation:ci-slide 1.2s ease-in-out infinite}",
+  "@keyframes ci-slide{0%{margin-left:0}50%{margin-left:70%}100%{margin-left:0}}",
+  ".ci-current{font-size:13px;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".ci-results{max-height:260px;overflow:auto;margin-top:12px;display:flex;flex-direction:column;gap:6px}",
+  ".ci-result{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:18px}",
+  ".ci-result-mark{flex-shrink:0;width:14px;text-align:center}",
+  ".ci-result-text{flex:1;min-width:0;overflow-wrap:anywhere}",
+  ".ci-result-text b{font-weight:500}",
+  ".ci-hint{font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary,#8a919c)}",
+  // ── direction tabs ─────────────────────────────────────────────────────
+  ".ci-tabs{display:flex;gap:4px;border-bottom:1px solid var(--dsw-alias-line-regular,#e5e6eb)}",
+  ".ci-tab{appearance:none;border:0;background:transparent;padding:8px 12px;font:inherit;font-size:13px;line-height:20px;cursor:pointer;color:var(--dsw-alias-label-secondary,#4e5969);border-bottom:2px solid transparent;margin-bottom:-1px}",
+  ".ci-tab:hover{color:var(--dsw-alias-label-primary,#1f2329)}",
+  ".ci-tab.active{color:var(--dsw-alias-label-primary,#1f2329);font-weight:600;border-bottom-color:var(--dsw-alias-brand-primary,#2f6bff)}",
+  ".ci-tab-count{margin-left:6px;font-size:11px;line-height:16px;padding:0 6px;border-radius:9px;background:var(--dsw-alias-bg-l3,#e9eaee);color:var(--dsw-alias-label-secondary,#5c626b)}",
+  ".ci-tab.active .ci-tab-count{background:var(--dsw-alias-fill-secondary,rgba(47,107,255,.12));color:var(--dsw-alias-brand-primary,#2f6bff)}",
+  ".ci-empty-actions{margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}",
+  // ── export page ────────────────────────────────────────────────────────
+  // Everything below is scoped under `.ci-export`. Unscoped duplicates of
+  // `.ci-list` / `.ci-empty` / `.ci-error` used to be declared here as well,
+  // and because they came later in the sheet they overrode the import page:
+  // its conversation list was capped at 340px and its empty states shrank.
+  ".ci-export{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}",
+  ".ci-export-head{display:flex;flex-direction:column;gap:4px;flex-shrink:0}",
+  ".ci-export-body{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0;overflow:auto;padding-right:2px}",
+  ".ci-export-grid{display:flex;gap:16px;min-height:0;flex-wrap:wrap}",
+  ".ci-export-col{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:8px}",
+  ".ci-export .ci-col-head{font-size:12px;line-height:18px;font-weight:600;color:var(--dsw-alias-label-secondary,#4e5969)}",
+  ".ci-export .ci-list{flex:0 1 auto;display:flex;flex-direction:column;gap:2px;overflow:auto;max-height:300px;padding:2px;border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:10px}",
+  ".ci-export .ci-row{padding:9px 12px;border-bottom:none;border-radius:6px}",
+  ".ci-export .ci-row.selected{background:var(--dsw-alias-fill-secondary,rgba(47,107,255,.08));border-radius:6px}",
+  ".ci-export .ci-row.disabled{opacity:.55;cursor:not-allowed}",
+  ".ci-export .ci-empty{padding:14px 4px;font-size:12px}",
+  ".ci-export .ci-error{padding:10px 12px;font-size:12px;border-radius:8px}",
+  ".ci-export-options{display:flex;flex-wrap:wrap;gap:8px;align-items:center}",
+  ".ci-export-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;padding-top:10px;border-top:0.5px solid var(--dsw-alias-border-l2,#e5e6eb)}",
+  ".ci-btn{appearance:none;border:1px solid var(--dsw-alias-line-regular,#d0d3d9);background:var(--dsw-alias-bg-primary,#fff);color:inherit;font:inherit;font-size:13px;line-height:20px;padding:6px 14px;border-radius:6px;cursor:pointer}",
+  ".ci-btn:hover:not(:disabled){border-color:var(--dsw-alias-line-strong,#a9aeb8)}",
+  ".ci-btn.primary{background:var(--dsw-alias-brand-primary,#2f6bff);border-color:transparent;color:#fff;white-space:nowrap}",
+  ".ci-btn:disabled{opacity:.5;cursor:not-allowed}",
+  ".ci-plan{border:0.5px solid var(--dsw-alias-border-l2,#e5e6eb);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:5px;font-size:12px;line-height:18px;background:var(--dsw-alias-bg-l2,rgba(0,0,0,.02))}",
+  ".ci-plan.done{border-color:var(--dsw-alias-state-success-primary,#1f9d55)}",
+  ".ci-plan.bad{border-color:var(--dsw-alias-state-error-primary,#d93026);background:rgba(217,48,38,.06)}",
+  ".ci-plan-head{display:flex;align-items:center;gap:8px;font-size:13px;line-height:20px}",
+  ".ci-plan-busy{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8a919c)}",
+  ".ci-plan-line{overflow-wrap:anywhere}",
+  ".ci-plan-line.strong{font-weight:500;font-size:13px;line-height:20px}",
+  ".ci-plan-line.muted{color:var(--dsw-alias-label-tertiary,#8a919c)}",
+  ".ci-plan-line.path{font-family:var(--dsw-alias-font-family-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11px;line-height:16px}",
+  ".ci-plan-notes{margin:2px 0 0;padding-left:18px;color:var(--dsw-alias-label-secondary,#4e5969)}",
+  ".ci-scope-note{font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8a919c)}"
+].join("\n");
+var CSS_TAG_ID = "dsh-agent-session-sync/panel.css";
+function injectStyles() {
+  if (typeof document === "undefined") return;
+  if (document.querySelector(`style[data-plugin-css="${CSS_TAG_ID}"]`) !== null) return;
+  const tag = document.createElement("style");
+  tag.dataset.plugin = "dsh-agent-session-sync";
+  tag.dataset.pluginCss = CSS_TAG_ID;
+  tag.textContent = CSS;
+  document.head.appendChild(tag);
+}
+
+// src/client/apply.js
+var inject = ["slots", "locale", "layout", "sessions"];
+function readPageSessions(sessions) {
+  const feed = sessions === void 0 || sessions === null ? void 0 : sessions.list;
+  if (feed === void 0 || feed === null || typeof feed.getSnapshot !== "function") {
+    return { available: false, ids: [] };
+  }
+  let byId;
+  try {
+    byId = feed.getSnapshot()?.byId ?? {};
+  } catch {
+    return { available: false, ids: [] };
+  }
+  const ids = [];
+  for (const [id, row] of Object.entries(byId)) {
+    if (typeof id !== "string" || id === "") continue;
+    if (row?.origin === "subagent") continue;
+    if (row?.blank === true) continue;
+    ids.push(id);
+  }
+  return { available: true, ids };
+}
+function watchPageSessions(sessions, listener) {
+  const feed = sessions === void 0 || sessions === null ? void 0 : sessions.list;
+  if (feed === void 0 || feed === null || typeof feed.subscribe !== "function") return () => {
+  };
+  try {
+    return feed.subscribe(listener);
+  } catch {
+    return () => {
+    };
+  }
+}
+function apply(ctx) {
+  injectStyles();
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-agent-session-sync: dictionaries");
+  const t = ctx.locale.bind(NS);
+  const rpc = (endpoint, payload) => rpcCall(endpoint, payload);
+  ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({
+    name: "sidebar.panellist",
+    id: PANEL_ID,
+    order: 40,
+    label: () => t("panel"),
+    locale: NS
+  }, SessionImportIcon));
+  const refreshSessions = (results) => {
+    const sessions = ctx.sessions;
+    if (sessions === void 0) return;
+    for (const result of results ?? []) {
+      if (result?.ok === true && typeof result.sessionId === "string") {
+        sessions.refreshProjections(result.sessionId).catch(() => {
+        });
+      }
+    }
+    sessions.refresh().catch(() => {
+    });
+  };
+  const pageSessions = {
+    read: () => readPageSessions(ctx.sessions),
+    subscribe: (listener) => watchPageSessions(ctx.sessions, listener)
+  };
+  ctx.slots.inject("main", () => ctx.slots.register({
+    name: "main",
+    key: PANEL_ID,
+    locale: NS,
+    inject: () => ({
+      rpc,
+      refreshSessions,
+      // The export panel restricts its source list to what the page shows, so
+      // it needs both the current read and the change feed.
+      pageSessions
+    })
+  }, SessionImportPanel));
+}
+
+    return module.exports;
+  },
+});

@@ -1,0 +1,65 @@
+{
+  "name": "dsh-agent-session-sync",
+  "version": "0.3.8",
+  "description": "Two-way session import between DeepSeek Harness and local coding agents: read Codex, Claude Code, Cursor, ZCode, Kimi and WorkBuddy history into DSH, and import DSH sessions into those agents.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "docs",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "session-import",
+    "session-transfer",
+    "two-way",
+    "workbuddy",
+    "cursor",
+    "codex",
+    "claude-code",
+    "zcode",
+    "kimi"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "check": "node scripts/check-package.mjs",
+    "prepack": "node scripts/build-client.mjs && node scripts/check-package.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "license": "MIT",
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kejuecy/dsh-agent-session-sync.git"
+  },
+  "homepage": "https://github.com/kejuecy/dsh-agent-session-sync",
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
