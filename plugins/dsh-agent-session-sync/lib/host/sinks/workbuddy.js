@@ -630,6 +630,11 @@ export async function write(conversation, options = {}) {
 
   // 1) transcript first: a stray file is harmless, a row without a file is not.
   const written = atomicWrite(file, toJsonl(built.rows), { backup: exists });
+  if (written.strategy !== undefined && written.strategy !== 'rename') {
+    notes.push(
+      `目标文件被其它程序短暂占用：重试 ${written.retries} 次后已用「${written.strategy}」方式完成写入，内容不受影响`,
+    );
+  }
 
   // 2) index row + workspace, in one transaction so a crash cannot leave a
   //    half-registered session behind.
