@@ -69,16 +69,104 @@ export function backupFile(file) {
 }
 
 /**
+ * Sync sleep that does not burn CPU (works in Node's main and worker threads).
+ * @param ms - milliseconds to wait.
+ */
+function sleepSync(ms) {
+  if (!(ms > 0)) return;
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    // No Atomics.wait available: fall back to a brief spin.
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      // spin
+    }
+  }
+}
+
+/**
+ * Replace `to` with `from`, tolerating the Windows rename race.
+ *
+ * On Windows, renaming over a file that another process still holds open
+ * (the target app's watcher, an antivirus or the search indexer) fails with
+ * `EPERM`/`EACCES` even though the lock clears milliseconds later — this is
+ * exactly what happens when a second export updates an existing session while
+ * the target app is running. Strategy, in order:
+ *
+ *   1. retry the rename a few times with a growing backoff;
+ *   2. unlink the destination, then rename onto the free name;
+ *   3. copy over the destination (not atomic, but the temp file was fsynced
+ *      and the caller already made a backup, so content cannot be lost).
+ *
+ * @param from - source path (typically the freshly written temp file).
+ * @param to - destination path.
+ * @param deps - injectable `rename/unlink/copy/sleep/attempts/backoffMs` for tests.
+ * @returns `{ strategy, retries, recovered?, lastError? }`.
+ */
+export function replaceFile(from, to, deps = {}) {
+  const rename = deps.rename ?? ((f, t) => fs.renameSync(f, t));
+  const unlink = deps.unlink ?? ((f) => fs.unlinkSync(f));
+  const copy = deps.copy ?? ((f, t) => fs.copyFileSync(f, t));
+  const sleep = deps.sleep ?? sleepSync;
+  const attempts = deps.attempts ?? 5;
+  const backoffMs = deps.backoffMs ?? 150;
+
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      rename(from, to);
+      return { strategy: 'rename', retries: attempt - 1 };
+    } catch (error) {
+      lastError = error;
+      const code = error?.code;
+      if (code !== 'EPERM' && code !== 'EACCES') throw error;
+      if (attempt < attempts) sleep(backoffMs * attempt);
+    }
+  }
+
+  let unlinkOk = true;
+  try {
+    unlink(to);
+  } catch (error) {
+    unlinkOk = false;
+    lastError = error;
+  }
+  if (unlinkOk) {
+    try {
+      rename(from, to);
+      return { strategy: 'unlink+rename', retries: attempts, recovered: true };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  copy(from, to);
+  try {
+    unlink(from);
+  } catch {
+    // The caller's cleanup removes the temp file if this unlink loses a race.
+  }
+  return {
+    strategy: 'copy',
+    retries: attempts,
+    recovered: true,
+    lastError: String(lastError?.message ?? lastError ?? 'unknown'),
+  };
+}
+
+/**
  * Write a file atomically (temp + rename) with an optional backup.
  *
  * Renaming into place matters for agents that watch their transcript
  * directory: a half-written file would be read as a truncated session, whereas
- * a rename is atomic on the same volume.
+ * a rename is atomic on the same volume. Windows locks make the rename itself
+ * flaky when the target app is running — see `replaceFile` for the fallbacks.
  *
  * @param file - destination path.
  * @param content - string or Buffer.
- * @param options - `{ backup?: boolean, encoding?: string }`.
- * @returns `{ bytes, backupPath }`.
+ * @param options - `{ backup?: boolean, encoding?: string, replaceDeps?: object }`.
+ * @returns `{ bytes, backupPath, strategy?, retries? }`.
  */
 export function atomicWrite(file, content, options = {}) {
   ensureDir(path.dirname(file));
@@ -94,8 +182,8 @@ export function atomicWrite(file, content, options = {}) {
     } finally {
       fs.closeSync(fd);
     }
-    fs.renameSync(tmp, file);
-    return { bytes: data.length, backupPath };
+    const replaced = replaceFile(tmp, file, options.replaceDeps);
+    return { bytes: data.length, backupPath, ...replaced };
   } catch (error) {
     try {
       fs.unlinkSync(tmp);
