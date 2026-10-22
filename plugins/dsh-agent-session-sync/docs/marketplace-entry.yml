@@ -1,10 +1,10 @@
-# 向 awesome-dsh-plugin 提交收录时使用的条目。
+# 向 awesome-dsh-plugin 提交收录时使用的条目（monorepo 子包形式）。
 # 提交方式：fork https://github.com/awesome-dsh-plugin/awesome-dsh-plugin
-# 把本文件内容存为 data/plugins/kejuecy__dsh-agent-session-sync.yml 并开 PR。
+# 把本文件内容存为 data/plugins/kejuecy__dsh-skills--plugins-dsh-agent-session-sync.yml 并开 PR。
 # 一个 PR 只加这一条（规则上限 3 条，1 条最稳）。
-# 注意：仓库需创建满 1 天后 CI 才会放行；建议给仓库加 topic：dsh-plugin。
-url: https://github.com/kejuecy/dsh-agent-session-sync
-name: kejuecy/dsh-agent-session-sync
+# 注意：仓库需创建满 1 天后 CI 才会放行（本仓库建于 2026-10-22）。
+url: https://github.com/kejuecy/dsh-skills/tree/main/plugins/dsh-agent-session-sync
+name: kejuecy/dsh-skills#dsh-agent-session-sync
 category: session
 description:
   en: Two-way session transfer between DeepSeek Harness and local coding agents - read Codex, Claude Code, Cursor, ZCode, Kimi and WorkBuddy history into DSH, and write DSH sessions back into WorkBuddy, with merge on repeated import and in-place update on repeated export.
