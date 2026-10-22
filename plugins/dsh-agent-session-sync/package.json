@@ -1,6 +1,6 @@
 {
   "name": "dsh-agent-session-sync",
-  "version": "0.3.9",
+  "version": "0.4.0",
   "description": "Two-way session import between DeepSeek Harness and local coding agents: read Codex, Claude Code, Cursor, ZCode, Kimi and WorkBuddy history into DSH, and import DSH sessions into those agents.",
   "type": "module",
   "main": "lib/index.js",
