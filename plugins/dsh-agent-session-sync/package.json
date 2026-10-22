@@ -56,9 +56,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kejuecy/dsh-agent-session-sync.git"
+    "url": "git+https://github.com/kejuecy/dsh-skills.git"
   },
-  "homepage": "https://github.com/kejuecy/dsh-agent-session-sync",
+  "homepage": "https://github.com/kejuecy/dsh-skills",
   "devDependencies": {
     "esbuild": "^0.28.2"
   }
