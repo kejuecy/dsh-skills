@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 — 2026-10-22
+
+### 改进：导出的会话默认「完全权限」
+
+- 写进 WorkBuddy 的会话索引现在把 `permission_mode` 设为 **`fullAccess`**。之前写的是 `default`，
+  而 WorkBuddy 按这一列决定会话的权限级别：`default` 下每个工具调用都在等一次批准，导入的会话
+  历史里没有这条批准记录 —— 于是表现为「导入导出之后 agent 命令执行不了」。
+- 重复导出时**保留用户在 WorkBuddy 里手动改过的权限**（读旧行再写回）；只有新建或从没有权限值的
+  会话才落到 `fullAccess`，不会把用户的选择每次覆盖掉。
+- 已把本机两条历史导入会话就地更新为 `fullAccess`（改库前自动备份 `workbuddy.db.bak-plugin-*`）。
+- 说明：DSH 会话头本身不存权限级别（只有 cwd / origin / agentPreset），所以导入方向（WorkBuddy → DSH）
+  没有对应字段要写，问题只出在导出方向。
+
 ## 0.3.9 — 2026-10-22
 
 ### 修复：导出的会话在 WorkBuddy 里出现空的「提问」卡片
